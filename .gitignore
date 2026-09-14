@@ -1,0 +1,15 @@
+# Binaries
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+# Test binaries / coverage
+*.test
+*.out
+coverage.txt
+# Dependency dir (vendored)
+/vendor/
+# Editor / OS
+.DS_Store
+*.log

@@ -1,0 +1,23 @@
+name: Publish
+# Go modules are published by pushing a semver git tag (e.g. v0.1.0) — there is no
+# package registry to upload to; `go get` resolves modules directly from the tagged
+# commit. This workflow verifies the tagged commit builds and tests cleanly, and
+# warms the Go module proxy so `go get` serves the new version immediately.
+on:
+  release:
+    types: [published]
+  push:
+    tags: ["v*"]
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.22"
+      - name: Build + test the tagged release
+        run: go build ./... && go vet ./... && go test ./...
+      - name: Warm the Go module proxy
+        run: |
+          GOPROXY=proxy.golang.org go list -m "github.com/Cookie-Munch/go@${GITHUB_REF_NAME}" || true
