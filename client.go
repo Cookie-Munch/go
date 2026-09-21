@@ -200,6 +200,16 @@ func (c *Client) Me(ctx context.Context) (*Identity, error) {
 	return &out, nil
 }
 
+// Languages returns the languages the banner already has copy for — GET /v1/languages.
+// Diff it against your visitors' locales to find the ones you still have to write.
+func (c *Client) Languages(ctx context.Context) ([]SupportedLanguage, error) {
+	var out []SupportedLanguage
+	if err := c.get(ctx, "/v1/languages", nil, &out); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // Usage returns current resource usage for the org — GET /v1/usage.
 func (c *Client) Usage(ctx context.Context) (*Usage, error) {
 	var out Usage

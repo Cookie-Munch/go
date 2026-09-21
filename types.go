@@ -12,6 +12,17 @@ type Identity struct {
 	KeyPrefix string `json:"keyPrefix"`
 }
 
+// SupportedLanguage is one entry of GET /v1/languages: a language the banner
+// already has copy for. Source is "bundled" (ships in consent.js) or "extended"
+// (ships in the renderer, fetched when a banner is first drawn).
+type SupportedLanguage struct {
+	Code    string `json:"code"`
+	Name    string `json:"name"`
+	Endonym string `json:"endonym"`
+	RTL     bool   `json:"rtl"`
+	Source  string `json:"source"`
+}
+
 // Site is a registered property.
 type Site struct {
 	CBID         string `json:"cbid"`

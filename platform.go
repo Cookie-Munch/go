@@ -742,6 +742,14 @@ func (s *SitesService) Blocked(ctx context.Context, cbid string) (Object, error)
 	return s.c.object(ctx, "GET", sitePath(cbid, "/blocked"), nil, nil)
 }
 
+// ImportDeclaration reads a cookie declaration exported from another CMP and translates
+// its categories into ours — POST /v1/sites/{cbid}/import. Nothing is applied: their
+// vocabulary is not ours, and a cookie in the wrong category is a tag firing against a
+// refusal, so the result comes back for review.
+func (s *SitesService) ImportDeclaration(ctx context.Context, cbid, data string) (Object, error) {
+	return s.c.object(ctx, "POST", sitePath(cbid, "/import"), nil, map[string]any{"data": data})
+}
+
 // Delete removes a stored image — DELETE /v1/assets/{fileName}. Pass the URL Upload
 // returned, or just its file name. Only this org's images are reachable: the folder comes
 // from the API key, not from the name sent.
