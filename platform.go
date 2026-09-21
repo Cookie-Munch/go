@@ -735,6 +735,13 @@ func (s *AssetsService) Upload(ctx context.Context, data []byte, contentType str
 	return s.c.object(ctx, "POST", "/v1/assets", nil, body)
 }
 
+// Blocked lists pages where the embed could not load its banner renderer —
+// GET /v1/sites/{cbid}/blocked. The host page's Content Security Policy or Trusted Types
+// policy refused it, so nobody there can be asked for consent. Empty is the healthy answer.
+func (s *SitesService) Blocked(ctx context.Context, cbid string) (Object, error) {
+	return s.c.object(ctx, "GET", sitePath(cbid, "/blocked"), nil, nil)
+}
+
 // Delete removes a stored image — DELETE /v1/assets/{fileName}. Pass the URL Upload
 // returned, or just its file name. Only this org's images are reachable: the folder comes
 // from the API key, not from the name sent.
