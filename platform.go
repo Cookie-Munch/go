@@ -735,6 +735,17 @@ func (s *AssetsService) Upload(ctx context.Context, data []byte, contentType str
 	return s.c.object(ctx, "POST", "/v1/assets", nil, body)
 }
 
+// Delete removes a stored image — DELETE /v1/assets/{fileName}. Pass the URL Upload
+// returned, or just its file name. Only this org's images are reachable: the folder comes
+// from the API key, not from the name sent.
+func (s *AssetsService) Delete(ctx context.Context, urlOrFileName string) error {
+	name := urlOrFileName
+	if i := strings.LastIndex(name, "/"); i >= 0 {
+		name = name[i+1:]
+	}
+	return s.c.delete(ctx, "/v1/assets/"+esc(name))
+}
+
 // Roll rotates a key — POST /v1/keys/{prefix}/roll. The new secret is returned once and
 // keeps the old key's name, scopes, property lock and expiry; the old secret stops
 // working immediately.
