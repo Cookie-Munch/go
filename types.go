@@ -407,6 +407,13 @@ type ApiKeyIssued struct {
 // ApiKeyIssueInput is the optional body of POST /v1/keys.
 type ApiKeyIssueInput struct {
 	Name string `json:"name,omitempty"`
+	// Scopes grants only these scopes. Leave empty for a full-access key.
+	Scopes []string `json:"scopes,omitempty"`
+	// Cbids locks the key to these properties: it then works only on those sites and on
+	// no org-wide endpoint.
+	Cbids []string `json:"cbids,omitempty"`
+	// ExpiresInDays retires the key after this many days (1–3650). Zero means never.
+	ExpiresInDays int `json:"expiresInDays,omitempty"`
 }
 
 // ---- usage ------------------------------------------------------------------

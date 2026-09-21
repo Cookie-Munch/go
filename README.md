@@ -118,17 +118,34 @@ if errors.As(err, &apiErr) {
 | Field | Endpoints |
 |---|---|
 | `cm.Me`, `cm.Usage` | `/v1/me`, `/v1/usage` |
-| `cm.Sites` | list/create/get/delete, config, cookies, scan, A/B, snippet, verify, brand, flow (`GetFlow`/`EditFlow`/`SetFlow`), `EnableAdPersonalization` |
+| `cm.Sites` | list/create/get/delete, config, cookies, scan, A/B, snippet, verify, brand, flow (`GetFlow`/`EditFlow`/`SetFlow`), `EnableAdPersonalization`, `Banner`, `Policy` (Markdown), `AnalyzeSession` |
 | `cm.Consent` | `Ingest` (public), `Stats`, `Log`, `Export`, `Receipt`, `EraseSubject`, `ExportSubject` |
-| `cm.DSAR` | `List`, `Create`, `Advance` |
+| `cm.DSAR` | `List`, `Create`, `Advance`, `Response` (plain-text notice) |
 | `cm.Vendors` | `List`, `Create` (with risk scoring) |
-| `cm.RoPA` | `List`, `Create` |
+| `cm.RoPA` | `List`, `Create`, `ExportCSV` |
 | `cm.BrandKits` | `List`, `Create`, `Delete` |
 | `cm.Preferences` | `List`, `Save` |
 | `cm.Members` | `List`, `Invite`, `SetRole`, `Remove` |
-| `cm.Keys` | `List`, `Issue` |
+| `cm.Keys` | `List`, `Issue` — set `Scopes` and/or `Cbids` for a least-privilege key |
 | `cm.Webhooks` | `List`, `Create`, `Delete` |
 | `cm.Banners` | list/create/get/update/delete, `Assignments`, `SetAssignments`, `Publish` |
+| `cm.Identity` | `Resolve`, `Link`, `Cluster` |
+| `cm.Vault` | `Record`, `Current`, `Permits` |
+| `cm.Profile` | `Get`, `SetAttributes`, `Activate` |
+| `cm.Subscriptions` | `Topics`, `SetTopics`, `Get`, `Set`, `UnsubscribeAll`, `Resubscribe`, `Activation` |
+| `cm.Assessments` | `Templates`, `List`, `Start`, `Get`, `Answer`, `AutoPopulateFromMap`, `AutoPopulate`, `Submit`, `Approve`, `Reject` |
+| `cm.Discovery` | `IngestMap`, `GetMap`, `RopaDrafts`, `Evidence`, `Drift`, `PlanEnforcement` |
+| `cm.AI` | `GetPolicy`, `SetPolicy`, `Inspect`, `Inventory`, `Lineage`, `RegisterSystem`, `Systems`, `Audit` |
+| `cm.Fulfillment` | `SLA`, `Plan`, `Status`, and for the in-environment agent `PendingTasks`, `ReportTask` |
+| `cm.Regulatory` | `Feed`, `Upcoming` |
+| `cm.Reseller` | `List`, `Create`, `Get`, `Update`, `Deprovision` (suspends; `purge=true` deletes irreversibly), `ListKeys`, `MintKey`, `RevokeKey` — needs the `reseller:*` scopes |
+
+Every operation of the `/v1` API is reachable, and `parity_test.go` keeps it that way
+against `sdks/operations.json`, generated from the server's OpenAPI document. Identity,
+vault and profile reads are `POST`s so a person's identifiers never appear in a URL.
+
+`ResellerChildPatch.DSARRouting` distinguishes leaving the override alone (nil), clearing
+it (`ClearDSARRouting()`), and pinning it (`PinDSARRouting("child")`).
 
 ## Testing
 

@@ -62,6 +62,21 @@ type Client struct {
 	Keys        *KeysService
 	Webhooks    *WebhooksService
 	Banners     *BannersService
+
+	// The privacy platform beyond the banner, and the reseller API.
+	Identity      *IdentityService
+	Vault         *VaultService
+	Profile       *ProfileService
+	Subscriptions *SubscriptionsService
+	Assessments   *AssessmentsService
+	Discovery     *DiscoveryService
+	AI            *AIService
+	Fulfillment   *FulfillmentService
+	Regulatory    *RegulatoryService
+	Reseller      *ResellerService
+	Subjects      *SubjectsService
+	Org           *OrgService
+	Assets        *AssetsService
 }
 
 // Option configures a Client. Pass options to New.
@@ -117,6 +132,19 @@ func New(apiKey string, opts ...Option) *Client {
 	c.Keys = &KeysService{c: c}
 	c.Webhooks = &WebhooksService{c: c}
 	c.Banners = &BannersService{c: c}
+	c.Identity = &IdentityService{c: c}
+	c.Vault = &VaultService{c: c}
+	c.Profile = &ProfileService{c: c}
+	c.Subscriptions = &SubscriptionsService{c: c}
+	c.Assessments = &AssessmentsService{c: c}
+	c.Discovery = &DiscoveryService{c: c}
+	c.AI = &AIService{c: c}
+	c.Fulfillment = &FulfillmentService{c: c}
+	c.Regulatory = &RegulatoryService{c: c}
+	c.Reseller = &ResellerService{c: c}
+	c.Subjects = &SubjectsService{c: c}
+	c.Org = &OrgService{c: c}
+	c.Assets = &AssetsService{c: c}
 	return c
 }
 
@@ -179,6 +207,17 @@ func (c *Client) Usage(ctx context.Context) (*Usage, error) {
 		return nil, err
 	}
 	return &out, nil
+}
+
+// Audit returns the org's audit log, newest first — GET /v1/audit. Sign-ins aside, every
+// administrative change made in the dashboard or through the API, with who made it; API
+// actions are attributed to "apikey:<prefix>". limit <= 0 uses the server default (200).
+// Requires an unscoped key that is not property-locked.
+//
+// It lives on Client rather than in a sub-resource, mirroring the TypeScript SDK's
+// top-level audit().
+func (c *Client) Audit(ctx context.Context, limit int) (Object, error) {
+	return c.object(ctx, "GET", "/v1/audit", limitQuery(limit), nil)
 }
 
 // ---- internal request plumbing ----------------------------------------------
