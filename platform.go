@@ -440,6 +440,41 @@ func (s *FulfillmentService) Status(ctx context.Context, requestID string) (Obje
 	return s.c.object(ctx, "GET", "/v1/dsar/"+esc(requestID)+"/fulfillment", nil, nil)
 }
 
+// Executors lists the systems connected to run part of a request themselves.
+func (s *FulfillmentService) Executors(ctx context.Context) ([]Object, error) {
+	var out []Object
+	if err := s.c.get(ctx, "/v1/dsar/executors", nil, &out); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// ExecutorInput connects a system. SecretKey is stored encrypted and never returned;
+// WebhookSecret is optional — without it, completions are picked up by polling.
+type ExecutorInput struct {
+	Kind          string `json:"kind"`
+	BaseURL       string `json:"baseUrl"`
+	SecretKey     string `json:"secretKey"`
+	WebhookSecret string `json:"webhookSecret,omitempty"`
+	System        string `json:"system,omitempty"`
+	Auto          *bool  `json:"auto,omitempty"`
+}
+
+// ConnectExecutor registers a system. The response carries the webhook URL to configure in it.
+func (s *FulfillmentService) ConnectExecutor(ctx context.Context, input ExecutorInput) (Object, error) {
+	return s.c.object(ctx, "POST", "/v1/dsar/executors", nil, input)
+}
+
+// DisconnectExecutor removes a connection; its open sub-tasks stop being driven.
+func (s *FulfillmentService) DisconnectExecutor(ctx context.Context, id string) error {
+	return s.c.delete(ctx, "/v1/dsar/executors/"+esc(id))
+}
+
+// TaskExport returns the export bundle a connected system produced, fetched from it on demand.
+func (s *FulfillmentService) TaskExport(ctx context.Context, requestID, taskID string) (Object, error) {
+	return s.c.object(ctx, "GET", "/v1/dsar/"+esc(requestID)+"/tasks/"+esc(taskID)+"/export", nil, nil)
+}
+
 // PendingTasks is for the in-environment agent: tasks to execute inside your network.
 func (s *FulfillmentService) PendingTasks(ctx context.Context, limit int) (Object, error) {
 	return s.c.object(ctx, "GET", "/v1/dsar/agent/tasks", limitQuery(limit), nil)
