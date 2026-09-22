@@ -449,14 +449,17 @@ func (s *FulfillmentService) Executors(ctx context.Context) ([]Object, error) {
 	return out, nil
 }
 
-// ExecutorInput connects a system. SecretKey is stored encrypted and never returned;
-// WebhookSecret is optional — without it, completions are picked up by polling.
+// ExecutorInput connects a system that runs part of a rights request. Profile describes
+// that system's API — paths, the words it uses for export and erase, its status vocabulary,
+// how it signs webhooks — so connecting a new platform needs no code. SecretKey is stored
+// encrypted and never returned; WebhookSecret is optional, and without it completions are
+// picked up by polling.
 type ExecutorInput struct {
-	Kind          string `json:"kind"`
+	System        string `json:"system"`
 	BaseURL       string `json:"baseUrl"`
 	SecretKey     string `json:"secretKey"`
+	Profile       Object `json:"profile"`
 	WebhookSecret string `json:"webhookSecret,omitempty"`
-	System        string `json:"system,omitempty"`
 	Auto          *bool  `json:"auto,omitempty"`
 }
 
