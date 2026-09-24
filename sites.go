@@ -63,6 +63,16 @@ func (s *SitesService) PutConfig(ctx context.Context, cbid string, config SiteCo
 	return out, nil
 }
 
+// PatchConfig changes part of a site's config — PATCH /v1/sites/{cbid}/config.
+// Omitted fields keep their stored value; PutConfig replaces the whole document.
+func (s *SitesService) PatchConfig(ctx context.Context, cbid string, config SiteConfig) (SiteConfig, error) {
+	var out SiteConfig
+	if err := s.c.patch(ctx, sitePath(cbid, "/config"), config, &out); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // Cookies returns the latest categorized cookie declaration —
 // GET /v1/sites/{cbid}/cookies.
 func (s *SitesService) Cookies(ctx context.Context, cbid string) (*CookieDeclaration, error) {
