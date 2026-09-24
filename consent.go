@@ -21,6 +21,19 @@ func (s *ConsentService) Ingest(ctx context.Context, payload ConsentIngest) erro
 	return s.c.post(ctx, "/api/v1/consent", payload, nil)
 }
 
+// Verify re-walks the consent log's tamper-evident hash chain and reports whether it is
+// intact — GET /v1/sites/{cbid}/consent/verify. An edited, reordered or removed record
+// answers false. This is the evidence behind the log.
+func (s *ConsentService) Verify(ctx context.Context, cbid string) (bool, error) {
+	var out struct {
+		Valid bool `json:"valid"`
+	}
+	if err := s.c.get(ctx, sitePath(cbid, "/consent/verify"), nil, &out); err != nil {
+		return false, err
+	}
+	return out.Valid, nil
+}
+
 // Stats returns aggregated per-day consent stats —
 // GET /v1/sites/{cbid}/consent/stats.
 func (s *ConsentService) Stats(ctx context.Context, cbid string, query *RangeQuery) ([]ConsentDay, error) {
