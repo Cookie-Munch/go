@@ -190,6 +190,19 @@ func newAPIError(status int, body []byte) *APIError {
 
 // me identifies the caller (org, plan, key prefix) — GET /v1/me.
 //
+// CreateOrg creates a SIBLING organisation owned by the same account —
+// POST /v1/orgs. For starting a separate business of your own. Needs an
+// unscoped key, and counts against the account's plan org allowance (403
+// org_limit names the plan). Not reseller provisioning, which is for
+// organisations you run on behalf of YOUR customers.
+func (c *Client) CreateOrg(ctx context.Context, name string) (map[string]any, error) {
+	var out map[string]any
+	if err := c.post(ctx, "/v1/orgs", map[string]any{"name": name}, &out); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // It lives on Client rather than in a sub-resource, mirroring the TypeScript
 // SDK's top-level me().
 func (c *Client) Me(ctx context.Context) (*Identity, error) {
