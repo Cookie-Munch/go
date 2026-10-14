@@ -7,9 +7,45 @@ package cookiemunch
 
 // Identity is the response of GET /v1/me.
 type Identity struct {
-	OrgID     string `json:"orgId"`
-	Plan      string `json:"plan"`
-	KeyPrefix string `json:"keyPrefix"`
+	OrgID   string `json:"orgId"`
+	OrgName string `json:"orgName,omitempty"`
+	// Plan is the EFFECTIVE plan — the one every feature gate and limit uses.
+	Plan string `json:"plan"`
+	// PlanSource is "org" (this org's own subscription, free, or a reseller
+	// child plan) or "account" (a higher plan another org with the same owner
+	// pays for covers this one).
+	PlanSource string `json:"planSource,omitempty"`
+	// SubscribedPlan is what this org subscribes to itself ("free" = nothing).
+	SubscribedPlan string `json:"subscribedPlan,omitempty"`
+	// Features the effective plan unlocks (whiteLabel, tcf, sso, abTesting, ...).
+	Features  []string `json:"features,omitempty"`
+	KeyPrefix string   `json:"keyPrefix"`
+}
+
+// AccountOrg is one organisation on an account (GET /v1/orgs).
+type AccountOrg struct {
+	ID             string `json:"id"`
+	Name           string `json:"name"`
+	Plan           string `json:"plan"`
+	PlanSource     string `json:"planSource"`
+	SubscribedPlan string `json:"subscribedPlan"`
+	ParentOrgID    string `json:"parentOrgId,omitempty"`
+	CreatedAt      int64  `json:"createdAt"`
+	Current        bool   `json:"current"`
+}
+
+// OrgLimit is the per-account org cap. Max is nil when unlimited.
+type OrgLimit struct {
+	Max  *int   `json:"max"`
+	Plan string `json:"plan"`
+	Used int    `json:"used"`
+}
+
+// AccountOrgs is the response of GET /v1/orgs.
+type AccountOrgs struct {
+	Orgs       []AccountOrg `json:"orgs"`
+	OrgLimit   OrgLimit     `json:"orgLimit"`
+	UpgradeURL string       `json:"upgradeUrl"`
 }
 
 // SupportedLanguage is one entry of GET /v1/languages: a language the banner
@@ -267,6 +303,8 @@ type DsarRequest struct {
 	CreatedAt    int64  `json:"createdAt"`
 	DueAt        int64  `json:"dueAt"`
 	Note         string `json:"note,omitempty"`
+	// Test marks a test request: off the SLA board, labelled, deletable.
+	Test bool `json:"test,omitempty"`
 }
 
 // DsarCreate is the body of POST /v1/dsar.
@@ -275,6 +313,9 @@ type DsarCreate struct {
 	SubjectEmail string `json:"subjectEmail"`
 	Regulation   string `json:"regulation"`
 	Note         string `json:"note,omitempty"`
+	// Test files a test request: left out of SLA metrics and the deadline board, labelled
+	// as a test, and deletable with DSARService.Delete.
+	Test bool `json:"test,omitempty"`
 }
 
 // dsarWrap wraps DSAR responses ({ request: ... }).

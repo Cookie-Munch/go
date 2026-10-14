@@ -468,6 +468,70 @@ func (s *FulfillmentService) ConnectExecutor(ctx context.Context, input Executor
 	return s.c.object(ctx, "POST", "/v1/dsar/executors", nil, input)
 }
 
+// ExecutorUpdate changes a connection in place. Only non-nil fields are sent; the stored
+// credential is kept unless SecretKey is set. WebhookSecret follows the three-way rule: nil
+// leaves it, ClearExecutorWebhookSecret() removes it, ExecutorWebhookSecret(v) replaces it.
+type ExecutorUpdate struct {
+	Profile       Object
+	BaseURL       *string
+	SecretKey     *string
+	WebhookSecret **string
+	Auto          *bool
+}
+
+// ClearExecutorWebhookSecret removes a connection's webhook secret.
+func ClearExecutorWebhookSecret() **string { var none *string; return &none }
+
+// ExecutorWebhookSecret sets a connection's webhook secret.
+func ExecutorWebhookSecret(secret string) **string { v := &secret; return &v }
+
+// UpdateExecutor changes a connection in place — PATCH /v1/dsar/executors/{id}.
+func (s *FulfillmentService) UpdateExecutor(ctx context.Context, id string, patch ExecutorUpdate) (Object, error) {
+	body := map[string]any{}
+	if patch.Profile != nil {
+		body["profile"] = patch.Profile
+	}
+	if patch.BaseURL != nil {
+		body["baseUrl"] = *patch.BaseURL
+	}
+	if patch.SecretKey != nil {
+		body["secretKey"] = *patch.SecretKey
+	}
+	if patch.WebhookSecret != nil {
+		if *patch.WebhookSecret == nil {
+			body["webhookSecret"] = nil
+		} else {
+			body["webhookSecret"] = **patch.WebhookSecret
+		}
+	}
+	if patch.Auto != nil {
+		body["auto"] = *patch.Auto
+	}
+	return s.c.object(ctx, "PATCH", "/v1/dsar/executors/"+esc(id), nil, body)
+}
+
+// ExecutorTest asks a connection to look one person up without filing a request.
+// Operation is locate (default), export or erase; Open on an export opens and polls a real
+// export once. An erasure is never sent by a test.
+type ExecutorTest struct {
+	Email     string `json:"email"`
+	Operation string `json:"operation,omitempty"`
+	Open      bool   `json:"open,omitempty"`
+}
+
+// TestExecutor tries a connection — POST /v1/dsar/executors/{id}/test. The result carries
+// the raw (redacted) upstream answers and a one-line verdict.
+func (s *FulfillmentService) TestExecutor(ctx context.Context, id string, input ExecutorTest) (Object, error) {
+	return s.c.object(ctx, "POST", "/v1/dsar/executors/"+esc(id)+"/test", nil, input)
+}
+
+// Task returns one fulfilment task: its status history (events), every request made to a
+// connected system on its behalf (log, redacted, 30 days) and whether that system's version
+// changed mid-request — GET /v1/dsar/{id}/tasks/{taskId}.
+func (s *FulfillmentService) Task(ctx context.Context, requestID, taskID string) (Object, error) {
+	return s.c.object(ctx, "GET", "/v1/dsar/"+esc(requestID)+"/tasks/"+esc(taskID), nil, nil)
+}
+
 // DisconnectExecutor removes a connection; its open sub-tasks stop being driven.
 func (s *FulfillmentService) DisconnectExecutor(ctx context.Context, id string) error {
 	return s.c.delete(ctx, "/v1/dsar/executors/"+esc(id))
@@ -647,6 +711,27 @@ func limitQuery(limit int) url.Values {
 // each method — GET /v1/sites/{cbid}/verify/challenge.
 func (s *SitesService) VerifyChallenge(ctx context.Context, cbid string) (Object, error) {
 	return s.c.object(ctx, "GET", sitePath(cbid, "/verify/challenge"), nil, nil)
+}
+
+// PreviewTokenOptions asks for a banner preview. Every field is optional; zero values are
+// not sent.
+type PreviewTokenOptions struct {
+	// Region to force: a country or subdivision code ("de", "us-ca") or "eu".
+	Region string `json:"region,omitempty"`
+	// Lang to force, as a BCP 47 tag ("de", "pt-BR").
+	Lang string `json:"lang,omitempty"`
+	// URL of the page to preview. Default: the site's registered domain.
+	URL string `json:"url,omitempty"`
+	// TTLSeconds is the token lifetime, 1..3600 (default 900).
+	TTLSeconds int `json:"ttlSeconds,omitempty"`
+}
+
+// PreviewToken mints a short-lived signed token to see the banner as a visitor in a given
+// region and language sees it — headless browsers included, nothing recorded —
+// POST /v1/sites/{cbid}/preview-token. The result carries "token", "expiresAt" and
+// "previewUrl".
+func (s *SitesService) PreviewToken(ctx context.Context, cbid string, opts PreviewTokenOptions) (Object, error) {
+	return s.c.object(ctx, "POST", sitePath(cbid, "/preview-token"), nil, opts)
 }
 
 // BulkSite is one site to create in a bulk call.

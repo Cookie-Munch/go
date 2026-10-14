@@ -38,6 +38,21 @@ func (s *DSARService) Advance(ctx context.Context, id, toStatus string) (*DsarRe
 	return &out.Request, nil
 }
 
+// Get returns one request, in the shape List returns — GET /v1/dsar/{id}.
+func (s *DSARService) Get(ctx context.Context, id string) (*DsarRequest, error) {
+	var out DsarRequest
+	if err := s.c.get(ctx, "/v1/dsar/"+url.PathEscape(id), nil, &out); err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+// Delete removes a TEST request with its tasks and log — DELETE /v1/dsar/{id}. A real
+// request is refused (409 not_a_test_request); the deletion is audited.
+func (s *DSARService) Delete(ctx context.Context, id string) error {
+	return s.c.delete(ctx, "/v1/dsar/"+url.PathEscape(id))
+}
+
 // ---- vendors ----------------------------------------------------------------
 
 // VendorsService groups the /v1/vendors endpoints.

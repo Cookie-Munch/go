@@ -188,8 +188,19 @@ func newAPIError(status int, body []byte) *APIError {
 	return e
 }
 
-// me identifies the caller (org, plan, key prefix) — GET /v1/me.
-//
+// ListOrgs lists every organisation on this key's account — GET /v1/orgs —
+// each with its effective plan, PlanSource ("org" = its own subscription,
+// "account" = covered by a higher plan another org on the account pays for)
+// and SubscribedPlan, plus the per-account org cap and the upgrade URL. Needs
+// an unscoped key that is not locked to properties.
+func (c *Client) ListOrgs(ctx context.Context) (*AccountOrgs, error) {
+	var out AccountOrgs
+	if err := c.get(ctx, "/v1/orgs", nil, &out); err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
 // CreateOrg creates a SIBLING organisation owned by the same account —
 // POST /v1/orgs. For starting a separate business of your own. Needs an
 // unscoped key, and counts against the account's plan org allowance (403
@@ -203,8 +214,10 @@ func (c *Client) CreateOrg(ctx context.Context, name string) (map[string]any, er
 	return out, nil
 }
 
-// It lives on Client rather than in a sub-resource, mirroring the TypeScript
-// SDK's top-level me().
+// Me identifies the caller — GET /v1/me: the org, its effective plan and
+// where that plan comes from (PlanSource), the features it unlocks, and the
+// key's scopes. It lives on Client rather than in a sub-resource, mirroring
+// the TypeScript SDK's top-level me().
 func (c *Client) Me(ctx context.Context) (*Identity, error) {
 	var out Identity
 	if err := c.get(ctx, "/v1/me", nil, &out); err != nil {

@@ -73,6 +73,22 @@ func (s *SitesService) PatchConfig(ctx context.Context, cbid string, config Site
 	return out, nil
 }
 
+// DryRunConfig previews a config write without saving it — PATCH (or, with
+// replace=true, PUT) /v1/sites/{cbid}/config?dryRun=1. The result carries the
+// config as it would be saved ("config"), every leaf that would change ("diff")
+// and any "warnings".
+func (s *SitesService) DryRunConfig(ctx context.Context, cbid string, config SiteConfig, replace bool) (map[string]any, error) {
+	method := "PATCH"
+	if replace {
+		method = "PUT"
+	}
+	var out map[string]any
+	if err := s.c.do(ctx, method, sitePath(cbid, "/config"), url.Values{"dryRun": {"1"}}, config, &out); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // Cookies returns the latest categorized cookie declaration —
 // GET /v1/sites/{cbid}/cookies.
 func (s *SitesService) Cookies(ctx context.Context, cbid string) (*CookieDeclaration, error) {
