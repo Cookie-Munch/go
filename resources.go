@@ -53,6 +53,23 @@ func (s *DSARService) Delete(ctx context.Context, id string) error {
 	return s.c.delete(ctx, "/v1/dsar/"+url.PathEscape(id))
 }
 
+// MarkTestResult is what MarkTest answers: the request, and whether this call changed it.
+type MarkTestResult struct {
+	Request DsarRequest `json:"request"`
+	Changed bool        `json:"changed"`
+}
+
+// MarkTest marks a CLOSED request (completed or rejected) as a test, after the fact —
+// POST /v1/dsar/{id}/mark-test. An open request is refused (409 request_not_closed).
+// Audited; afterwards Delete works on it.
+func (s *DSARService) MarkTest(ctx context.Context, id string) (*MarkTestResult, error) {
+	var out MarkTestResult
+	if err := s.c.post(ctx, "/v1/dsar/"+url.PathEscape(id)+"/mark-test", nil, &out); err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
 // ---- vendors ----------------------------------------------------------------
 
 // VendorsService groups the /v1/vendors endpoints.

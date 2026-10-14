@@ -2,6 +2,7 @@ package cookiemunch
 
 import (
 	"context"
+	"net/http"
 	"net/url"
 	"strconv"
 )
@@ -54,7 +55,29 @@ func (s *SitesService) GetConfig(ctx context.Context, cbid string) (SiteConfig, 
 	return out, nil
 }
 
-// PutConfig upserts a site's config — PUT /v1/sites/{cbid}/config.
+// PutConfigKeepingUnspecified replaces the fields config sends and keeps the stored
+// value of every top-level field it omits — PUT /v1/sites/{cbid}/config?keep=unspecified.
+// Each field sent is still replaced whole; one sent as nil reverts to its default.
+func (s *SitesService) PutConfigKeepingUnspecified(ctx context.Context, cbid string, config SiteConfig) (SiteConfig, error) {
+	var out SiteConfig
+	if err := s.c.do(ctx, http.MethodPut, sitePath(cbid, "/config"), url.Values{"keep": {"unspecified"}}, config, &out); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// DryRunPutConfigKeepingUnspecified previews PutConfigKeepingUnspecified without saving —
+// PUT /v1/sites/{cbid}/config?dryRun=1&keep=unspecified.
+func (s *SitesService) DryRunPutConfigKeepingUnspecified(ctx context.Context, cbid string, config SiteConfig) (map[string]any, error) {
+	var out map[string]any
+	if err := s.c.do(ctx, http.MethodPut, sitePath(cbid, "/config"), url.Values{"dryRun": {"1"}, "keep": {"unspecified"}}, config, &out); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// PutConfig replaces a site's config — PUT /v1/sites/{cbid}/config. A top-level field
+// config omits reverts to its default (see PutConfigKeepingUnspecified).
 func (s *SitesService) PutConfig(ctx context.Context, cbid string, config SiteConfig) (SiteConfig, error) {
 	var out SiteConfig
 	if err := s.c.put(ctx, sitePath(cbid, "/config"), config, &out); err != nil {
@@ -63,8 +86,9 @@ func (s *SitesService) PutConfig(ctx context.Context, cbid string, config SiteCo
 	return out, nil
 }
 
-// PatchConfig changes part of a site's config — PATCH /v1/sites/{cbid}/config.
-// Omitted fields keep their stored value; PutConfig replaces the whole document.
+// PatchConfig changes part of a site's config — PATCH /v1/sites/{cbid}/config, a JSON
+// Merge Patch (RFC 7386): omitted fields keep their stored value, and a field set to nil
+// is removed (it takes its default). PutConfig replaces the whole document.
 func (s *SitesService) PatchConfig(ctx context.Context, cbid string, config SiteConfig) (SiteConfig, error) {
 	var out SiteConfig
 	if err := s.c.patch(ctx, sitePath(cbid, "/config"), config, &out); err != nil {

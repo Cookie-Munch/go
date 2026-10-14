@@ -873,6 +873,59 @@ func (s *SitesService) ImportDeclaration(ctx context.Context, cbid, data string)
 	return s.c.object(ctx, "POST", sitePath(cbid, "/import"), nil, map[string]any{"data": data})
 }
 
+// ApplyImport imports a declaration exported from another CMP AND declares it —
+// POST /v1/sites/{cbid}/import?apply=1. Every row whose category mapped to ours and that
+// has a purpose is declared; the rest come back in "skipped". Cookies the site already
+// declared are kept unless overwrite is true.
+func (s *SitesService) ApplyImport(ctx context.Context, cbid, data string, overwrite bool) (Object, error) {
+	q := url.Values{"apply": {"1"}}
+	if overwrite {
+		q.Set("overwrite", "1")
+	}
+	return s.c.object(ctx, "POST", sitePath(cbid, "/import"), q, map[string]any{"data": data})
+}
+
+// DeclaredCookieInput is what the site owner says a cookie is. Category is a standard
+// category or one of the site's categories.custom ids (not "unclassified").
+type DeclaredCookieInput struct {
+	Category string `json:"category"`
+	Purpose  string `json:"purpose"`
+	Provider string `json:"provider,omitempty"`
+	Expiry   string `json:"expiry,omitempty"`
+	Domain   string `json:"domain,omitempty"`
+	// Pattern treats the name as a prefix wildcard (a trailing "*" does the same).
+	Pattern bool `json:"pattern,omitempty"`
+}
+
+// DeclaredCookieItem is one entry of a bulk declaration.
+type DeclaredCookieItem struct {
+	Name string `json:"name"`
+	DeclaredCookieInput
+}
+
+// DeclareCookie declares what one cookie is — PUT /v1/sites/{cbid}/cookies/{name}. It
+// overrides scanned, observed and database classification everywhere (API, preference
+// modal, data-cc="declaration"). A name ending in "*" declares a prefix wildcard.
+func (s *SitesService) DeclareCookie(ctx context.Context, cbid, name string, in DeclaredCookieInput) (Object, error) {
+	return s.c.object(ctx, "PUT", sitePath(cbid, "/cookies/"+esc(name)), nil, in)
+}
+
+// DeclareCookies declares many cookies at once — PUT /v1/sites/{cbid}/cookies.
+// All-or-nothing; replace also removes declarations the list does not name.
+func (s *SitesService) DeclareCookies(ctx context.Context, cbid string, cookies []DeclaredCookieItem, replace bool) (Object, error) {
+	body := map[string]any{"cookies": cookies}
+	if replace {
+		body["replace"] = true
+	}
+	return s.c.object(ctx, "PUT", sitePath(cbid, "/cookies"), nil, body)
+}
+
+// UndeclareCookie removes a declaration — DELETE /v1/sites/{cbid}/cookies/{name}. The
+// scanned classification applies again.
+func (s *SitesService) UndeclareCookie(ctx context.Context, cbid, name string) error {
+	return s.c.do(ctx, "DELETE", sitePath(cbid, "/cookies/"+esc(name)), nil, nil, nil)
+}
+
 // Delete removes a stored image — DELETE /v1/assets/{fileName}. Pass the URL Upload
 // returned, or just its file name. Only this org's images are reachable: the folder comes
 // from the API key, not from the name sent.
