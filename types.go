@@ -140,8 +140,28 @@ type CookieDeclaration struct {
 // (per OpenAPI) is { status, lastScannedAt }, not the richer ScanResult in the
 // TypeScript SDK's types.
 type ScanStatus struct {
-	Status        string `json:"status"`        // idle | scanning
+	Status        string `json:"status"`        // idle | scanning (kept for older clients; read State)
 	LastScannedAt *int64 `json:"lastScannedAt"` // epoch-ms of last scan, or null
+	// State is queued | scanning | done | failed; empty when the site was never scanned.
+	State      string `json:"state,omitempty"`
+	ScanID     string `json:"scanId,omitempty"`
+	StartedAt  *int64 `json:"startedAt,omitempty"`
+	FinishedAt *int64 `json:"finishedAt,omitempty"`
+	DurationMs *int64 `json:"durationMs,omitempty"`
+	// CookieCount is what this crawl saw; the stored list also keeps KeptFromEarlier earlier finds.
+	CookieCount     *int `json:"cookieCount,omitempty"`
+	KeptFromEarlier *int `json:"keptFromEarlier,omitempty"`
+	PagesVisited    *int `json:"pagesVisited,omitempty"`
+	// Error says why it failed.
+	Error        string         `json:"error,omitempty"`
+	ButtonParity map[string]any `json:"buttonParity,omitempty"`
+}
+
+// RetireCookieInput is the body of RetireCookie: the cookie's new name, if it was
+// renamed, and a note. Both optional.
+type RetireCookieInput struct {
+	RenamedTo string `json:"renamedTo,omitempty"`
+	Note      string `json:"note,omitempty"`
 }
 
 // AbResult is one A/B banner-experiment variant's results. Per the OpenAPI

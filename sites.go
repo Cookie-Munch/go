@@ -2,9 +2,11 @@ package cookiemunch
 
 import (
 	"context"
+	"math"
 	"net/http"
 	"net/url"
 	"strconv"
+	"time"
 )
 
 // SitesService groups the /v1/sites endpoints.
@@ -158,6 +160,67 @@ func (s *SitesService) ScanStatus(ctx context.Context, cbid string) (*ScanStatus
 		return nil, err
 	}
 	return &out, nil
+}
+
+// ScanWait starts a cookie crawl and holds the request until it is done or failed, or
+// until wait (at most 60 s) runs out — POST /v1/sites/{cbid}/scan?wait=.
+func (s *SitesService) ScanWait(ctx context.Context, cbid string, wait time.Duration) (*ScanStatus, error) {
+	var out ScanStatus
+	if err := s.c.do(ctx, http.MethodPost, sitePath(cbid, "/scan"), waitQuery(wait), nil, &out); err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+// ScanStatusWait is ScanStatus holding the request until a running scan settles, or
+// until wait (at most 60 s) runs out — GET /v1/sites/{cbid}/scan?wait=.
+func (s *SitesService) ScanStatusWait(ctx context.Context, cbid string, wait time.Duration) (*ScanStatus, error) {
+	var out ScanStatus
+	if err := s.c.get(ctx, sitePath(cbid, "/scan"), waitQuery(wait), &out); err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+// WaitForScan returns once the site's scan is done or failed (read State and Error),
+// long-polling the server; at timeout it returns the still-running state. Each request
+// asks the server to hold no longer than the HTTP client's own timeout allows.
+func (s *SitesService) WaitForScan(ctx context.Context, cbid string, timeout time.Duration) (*ScanStatus, error) {
+	until := time.Now().Add(timeout)
+	for {
+		asked := time.Until(until)
+		if asked > 60*time.Second {
+			asked = 60 * time.Second
+		}
+		if t := s.c.httpClient.Timeout; t > 0 && asked > t-5*time.Second {
+			asked = t - 5*time.Second
+		}
+		if asked < 0 {
+			asked = 0
+		}
+		started := time.Now()
+		r, err := s.ScanStatusWait(ctx, cbid, asked)
+		if err != nil || r.Status != "scanning" || !time.Now().Before(until) {
+			return r, err
+		}
+		// A server that answered sooner than asked is not hammered.
+		gap := time.Second
+		if left := time.Until(until); left < gap {
+			gap = left
+		}
+		if early := gap - time.Since(started); early > 0 {
+			select {
+			case <-ctx.Done():
+				return r, ctx.Err()
+			case <-time.After(early):
+			}
+		}
+	}
+}
+
+// waitQuery is ?wait=<seconds> (30, 1.5).
+func waitQuery(d time.Duration) url.Values {
+	return url.Values{"wait": {strconv.FormatFloat(math.Round(d.Seconds()*1000)/1000, 'f', -1, 64)}}
 }
 
 // Ab returns A/B experiment results — GET /v1/sites/{cbid}/ab.

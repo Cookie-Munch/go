@@ -9,6 +9,7 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 )
 
 type recorded struct {
@@ -479,5 +480,70 @@ func TestDeclaredCookiesPurposesAndDryRun(t *testing.T) {
 	}
 	if out["dryRun"] != true {
 		t.Errorf("dry run answer = %v", out)
+	}
+}
+
+func TestRetireAndUnretire(t *testing.T) {
+	c, calls := recorder(t, "application/json", `{"dryRun":true,"retired":[]}`)
+	ctx := context.Background()
+	if _, err := c.Sites.RetireCookie(ctx, "cb", "old", RetireCookieInput{RenamedTo: "new", Note: "v2"}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := c.Sites.RetireCookieDryRun(ctx, "cb", "atlas_*", RetireCookieInput{}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := c.Sites.UnretireCookieDryRun(ctx, "cb", "old"); err != nil {
+		t.Fatal(err)
+	}
+	_ = c.Sites.UnretireCookie(ctx, "cb", "old")
+	got := []string{}
+	for _, x := range *calls {
+		got = append(got, x.method+" "+x.url)
+	}
+	want := []string{
+		"POST /v1/sites/cb/cookies/old/retire",
+		"POST /v1/sites/cb/cookies/atlas_%2A/retire?dryRun=1",
+		"DELETE /v1/sites/cb/cookies/old/retire?dryRun=1",
+		"DELETE /v1/sites/cb/cookies/old/retire",
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("calls = %v", got)
+	}
+	if !reflect.DeepEqual((*calls)[0].body, map[string]any{"renamedTo": "new", "note": "v2"}) {
+		t.Errorf("retire body = %v", (*calls)[0].body)
+	}
+	if !reflect.DeepEqual((*calls)[1].body, map[string]any{}) {
+		t.Errorf("empty retire body = %v", (*calls)[1].body)
+	}
+}
+
+func TestScanWaitAndWaitForScan(t *testing.T) {
+	c, calls := recorder(t, "application/json", `{"status":"idle","state":"done","scanId":"s1","cookieCount":3,"keptFromEarlier":12,"pagesVisited":5,"durationMs":31000,"lastScannedAt":9}`)
+	ctx := context.Background()
+	if _, err := c.Sites.ScanWait(ctx, "cb", 30*time.Second); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := c.Sites.ScanStatusWait(ctx, "cb", 1500*time.Millisecond); err != nil {
+		t.Fatal(err)
+	}
+	r, err := c.Sites.WaitForScan(ctx, "cb", 2*time.Minute)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if r.State != "done" || r.CookieCount == nil || *r.CookieCount != 3 || *r.KeptFromEarlier != 12 || *r.PagesVisited != 5 || *r.DurationMs != 31000 || r.ScanID != "s1" {
+		t.Errorf("status = %+v", r)
+	}
+	got := []string{}
+	for _, x := range *calls {
+		got = append(got, x.method+" "+x.url)
+	}
+	want := []string{
+		"POST /v1/sites/cb/scan?wait=30",
+		"GET /v1/sites/cb/scan?wait=1.5",
+		// Inside the default http.Client's 30 s timeout.
+		"GET /v1/sites/cb/scan?wait=25",
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("calls = %v", got)
 	}
 }

@@ -1175,6 +1175,33 @@ func (s *SitesService) UndeclareCookie(ctx context.Context, cbid, name string) e
 
 var dryRun = url.Values{"dryRun": {"1"}}
 
+// RetireCookie retires a cookie the site renamed or stopped setting — POST
+// /v1/sites/{cbid}/cookies/{name}/retire. It leaves the banner's cookie list,
+// data-cc="declaration" and the public feed, and stays listed for the owner with
+// "retired". A name ending in * retires every cookie with that prefix. If a crawl or a
+// visit sees it again afterwards it is listed again, flagged "retired_but_seen".
+func (s *SitesService) RetireCookie(ctx context.Context, cbid, name string, in RetireCookieInput) (Object, error) {
+	return s.c.object(ctx, "POST", sitePath(cbid, "/cookies/"+esc(name)+"/retire"), nil, in)
+}
+
+// RetireCookieDryRun is RetireCookie with ?dryRun=1: the retirement as it would be
+// stored and the would-be list ("retired"); nothing is.
+func (s *SitesService) RetireCookieDryRun(ctx context.Context, cbid, name string, in RetireCookieInput) (Object, error) {
+	return s.c.object(ctx, "POST", sitePath(cbid, "/cookies/"+esc(name)+"/retire"), dryRun, in)
+}
+
+// UnretireCookie un-retires a cookie — DELETE /v1/sites/{cbid}/cookies/{name}/retire.
+// It is listed again everywhere.
+func (s *SitesService) UnretireCookie(ctx context.Context, cbid, name string) error {
+	return s.c.do(ctx, "DELETE", sitePath(cbid, "/cookies/"+esc(name)+"/retire"), nil, nil, nil)
+}
+
+// UnretireCookieDryRun answers with what un-retiring would leave ("retired") and removes
+// nothing (?dryRun=1).
+func (s *SitesService) UnretireCookieDryRun(ctx context.Context, cbid, name string) (Object, error) {
+	return s.c.object(ctx, "DELETE", sitePath(cbid, "/cookies/"+esc(name)+"/retire"), dryRun, nil)
+}
+
 // DeclareCookieDryRun validates DeclareCookie and answers with what it would store —
 // "cookie", "declared" (the would-be list) and a "diff" — storing nothing (?dryRun=1).
 func (s *SitesService) DeclareCookieDryRun(ctx context.Context, cbid, name string, in DeclaredCookieInput) (Object, error) {
