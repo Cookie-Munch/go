@@ -803,6 +803,110 @@ func (s *SubjectsService) Consent(ctx context.Context, subjectID string) (Object
 	return s.c.object(ctx, "GET", "/v1/subjects/"+esc(subjectID)+"/consent", nil, nil)
 }
 
+// RightsLinksService mints account-linked rights requests: single-use links to the hosted
+// rights page for a person your backend knows is signed in.
+type RightsLinksService struct{ c *Client }
+
+// RightsLinkSubject is the signed-in person. Email must be an address you have verified;
+// UserID (optional) is your own account id, recorded on the request.
+type RightsLinkSubject struct {
+	Email  string `json:"email"`
+	UserID string `json:"userId,omitempty"`
+}
+
+// RightsLinkInput asks for a rights link. Rights limits the link to those rights (default:
+// every right the page offers); TTLSeconds is 60..3600 (default 900). Zero values are not sent.
+type RightsLinkInput struct {
+	Subject    RightsLinkSubject `json:"subject"`
+	Rights     []string          `json:"rights,omitempty"`
+	TTLSeconds int               `json:"ttlSeconds,omitempty"`
+}
+
+// Create mints the link — POST /v1/sites/{cbid}/rights-links. The page locks the person's
+// email and skips the code step; show "url" only to them. The result carries "url" and
+// "expiresAt". Needs dsar:write.
+func (s *RightsLinksService) Create(ctx context.Context, cbid string, in RightsLinkInput) (Object, error) {
+	return s.c.object(ctx, "POST", sitePath(cbid, "/rights-links"), nil, in)
+}
+
+// RightsCaptchaService is a site's rights-page captcha: your own Turnstile, hCaptcha or
+// reCAPTCHA keys (recommended), or off. A site without its own setting uses the organisation
+// default (Org.RightsCaptcha), else off. Cookie Munch's own captcha is never used on rights
+// pages. Needs sites:read / sites:write.
+type RightsCaptchaService struct{ c *Client }
+
+// RightsCaptchaInput sets a rights-page captcha. Mode is "own" or "off". For "own": Provider
+// (turnstile, hcaptcha, recaptcha_v2, recaptcha_v3), SiteKey, and Secret (write-only; leave it
+// empty to keep the stored one) — the provider must accept the secret before it is saved.
+// MinScore is for recaptcha_v3 (0.1-0.9; 0 = the default 0.5). "off" removes spam protection
+// beyond the spam-trap field, the rate limits and the email code. Zero values are not sent.
+type RightsCaptchaInput struct {
+	Mode     string  `json:"mode"`
+	Provider string  `json:"provider,omitempty"`
+	SiteKey  string  `json:"siteKey,omitempty"`
+	Secret   string  `json:"secret,omitempty"`
+	MinScore float64 `json:"minScore,omitempty"`
+}
+
+// Get returns the setting in force — GET /v1/sites/{cbid}/rights-captcha ("source": site, org
+// or default). Never the secret.
+func (s *RightsCaptchaService) Get(ctx context.Context, cbid string) (Object, error) {
+	return s.c.object(ctx, "GET", sitePath(cbid, "/rights-captcha"), nil, nil)
+}
+
+// Set saves the site's own setting — PUT /v1/sites/{cbid}/rights-captcha.
+func (s *RightsCaptchaService) Set(ctx context.Context, cbid string, in RightsCaptchaInput) (Object, error) {
+	return s.c.object(ctx, "PUT", sitePath(cbid, "/rights-captcha"), nil, in)
+}
+
+// Remove drops the site's own setting — DELETE /v1/sites/{cbid}/rights-captcha. The site
+// inherits the organisation default again; the result is the setting now in force.
+func (s *RightsCaptchaService) Remove(ctx context.Context, cbid string) (Object, error) {
+	return s.c.object(ctx, "DELETE", sitePath(cbid, "/rights-captcha"), nil, nil)
+}
+
+// RightsIdentityService is a site's sign-in provider (Clerk, Atlas or any JWKS issuer): a
+// visitor signed in to your site is verified by their session, with no code mail. A site
+// without its own setting uses the organisation default (Org.RightsIdentity). Needs
+// sites:read / sites:write.
+type RightsIdentityService struct{ c *Client }
+
+// RightsIdentityInput connects a sign-in provider. Type is "clerk", "atlas" or "oidc_jwt";
+// Issuer is exactly the token's iss. JwksURL is required for oidc_jwt (clerk/atlas default to
+// <issuer>/.well-known/jwks.json); AuthorizedParties (your own origins) is required for clerk
+// and atlas; oidc_jwt needs an Audience or AuthorizedParties. The JWKS is fetched and checked
+// before anything is saved. The token must carry the email and a verified-email claim set to
+// true; TrustEmailClaim (clerk/atlas only) accepts a token without the verified claim — set it
+// only if every address your provider puts in the email claim is verified. Zero values are not sent.
+type RightsIdentityInput struct {
+	Type               string   `json:"type"`
+	Issuer             string   `json:"issuer"`
+	JwksURL            string   `json:"jwksUrl,omitempty"`
+	Audience           string   `json:"audience,omitempty"`
+	AuthorizedParties  []string `json:"authorizedParties,omitempty"`
+	EmailClaim         string   `json:"emailClaim,omitempty"`
+	EmailVerifiedClaim string   `json:"emailVerifiedClaim,omitempty"`
+	SessionCookieName  string   `json:"sessionCookieName,omitempty"`
+	TrustEmailClaim    bool     `json:"trustEmailClaim,omitempty"`
+}
+
+// Get returns the setting in force — GET /v1/sites/{cbid}/rights-identity ("source": site, org
+// or default).
+func (s *RightsIdentityService) Get(ctx context.Context, cbid string) (Object, error) {
+	return s.c.object(ctx, "GET", sitePath(cbid, "/rights-identity"), nil, nil)
+}
+
+// Set saves the site's own setting — PUT /v1/sites/{cbid}/rights-identity.
+func (s *RightsIdentityService) Set(ctx context.Context, cbid string, in RightsIdentityInput) (Object, error) {
+	return s.c.object(ctx, "PUT", sitePath(cbid, "/rights-identity"), nil, in)
+}
+
+// Remove drops the site's own setting — DELETE /v1/sites/{cbid}/rights-identity. The site
+// inherits the organisation default again; the result is the setting now in force.
+func (s *RightsIdentityService) Remove(ctx context.Context, cbid string) (Object, error) {
+	return s.c.object(ctx, "DELETE", sitePath(cbid, "/rights-identity"), nil, nil)
+}
+
 // ---- the operations only the dashboard used to have --------------------------
 
 // OrgService reads and changes the key's own organisation — /v1/org. It needs an
@@ -845,6 +949,99 @@ func (s *OrgService) Update(ctx context.Context, patch OrgUpdate) (Object, error
 		}
 	}
 	return s.c.object(ctx, "PATCH", "/v1/org", nil, body)
+}
+
+// MailProviderSES is the Amazon SES part of a MailProviderInput. The secret access key goes in Secret.
+type MailProviderSES struct {
+	Region      string `json:"region"`
+	AccessKeyID string `json:"accessKeyId"`
+}
+
+// MailProviderSMTP is the SMTP part of a MailProviderInput. Port is 25, 465, 587 or 2525;
+// Security is "tls" (implicit) or "starttls". The password goes in Secret.
+type MailProviderSMTP struct {
+	Host     string `json:"host"`
+	Port     int    `json:"port"`
+	Security string `json:"security"`
+	Username string `json:"username"`
+}
+
+// MailProviderInput is your own mail provider for rights-request mail. Provider is one of
+// brevo, sendgrid, postmark, resend, ses, smtp. Secret is write-only (API key, server token,
+// secret access key or SMTP password); leave it empty to keep the stored one (same provider only).
+// The whole provider is replaced, so a field left empty is cleared.
+type MailProviderInput struct {
+	Provider  string            `json:"provider"`
+	FromEmail string            `json:"fromEmail"`
+	FromName  string            `json:"fromName,omitempty"`
+	ReplyTo   string            `json:"replyTo,omitempty"`
+	Secret    string            `json:"secret,omitempty"`
+	SES       *MailProviderSES  `json:"ses,omitempty"`
+	SMTP      *MailProviderSMTP `json:"smtp,omitempty"`
+}
+
+// MailProvider returns your own mail provider for rights-request mail — GET /v1/org/mail-provider.
+// The credential is never returned, only secretLast4; "sender" says whether verification codes
+// go through it now ("own") or are not mailed at all ("none") — there is no shared sender.
+func (s *OrgService) MailProvider(ctx context.Context) (Object, error) {
+	return s.c.object(ctx, "GET", "/v1/org/mail-provider", nil, nil)
+}
+
+// SetMailProvider saves your own mail provider (recommended) — PUT /v1/org/mail-provider. It
+// carries rights mail only after TestMailProvider succeeds; every save clears that.
+func (s *OrgService) SetMailProvider(ctx context.Context, input MailProviderInput) (Object, error) {
+	return s.c.object(ctx, "PUT", "/v1/org/mail-provider", nil, input)
+}
+
+// TestMailProvider sends a test message through your provider — POST /v1/org/mail-provider/test.
+// An empty to sends to the reply-to address, else the from address. A refusal is ok=false
+// with the provider's reason, not an error.
+func (s *OrgService) TestMailProvider(ctx context.Context, to string) (Object, error) {
+	body := map[string]any{}
+	if to != "" {
+		body["to"] = to
+	}
+	return s.c.object(ctx, "POST", "/v1/org/mail-provider/test", nil, body)
+}
+
+// RemoveMailProvider removes your provider — DELETE /v1/org/mail-provider. No verification codes
+// are mailed after this.
+func (s *OrgService) RemoveMailProvider(ctx context.Context) error {
+	return s.c.delete(ctx, "/v1/org/mail-provider")
+}
+
+// RightsCaptcha returns the default captcha for your rights pages (sites without their own) —
+// GET /v1/org/rights-captcha. Never the secret.
+func (s *OrgService) RightsCaptcha(ctx context.Context) (Object, error) {
+	return s.c.object(ctx, "GET", "/v1/org/rights-captcha", nil, nil)
+}
+
+// SetRightsCaptcha sets the default — PUT /v1/org/rights-captcha: own keys (recommended) or off.
+func (s *OrgService) SetRightsCaptcha(ctx context.Context, in RightsCaptchaInput) (Object, error) {
+	return s.c.object(ctx, "PUT", "/v1/org/rights-captcha", nil, in)
+}
+
+// RemoveRightsCaptcha removes the default — DELETE /v1/org/rights-captcha: sites without their
+// own setting have no captcha. The result is the setting now in force.
+func (s *OrgService) RemoveRightsCaptcha(ctx context.Context) (Object, error) {
+	return s.c.object(ctx, "DELETE", "/v1/org/rights-captcha", nil, nil)
+}
+
+// RightsIdentity returns the default sign-in provider rights requests are verified with —
+// GET /v1/org/rights-identity.
+func (s *OrgService) RightsIdentity(ctx context.Context) (Object, error) {
+	return s.c.object(ctx, "GET", "/v1/org/rights-identity", nil, nil)
+}
+
+// SetRightsIdentity sets the default — PUT /v1/org/rights-identity.
+func (s *OrgService) SetRightsIdentity(ctx context.Context, in RightsIdentityInput) (Object, error) {
+	return s.c.object(ctx, "PUT", "/v1/org/rights-identity", nil, in)
+}
+
+// RemoveRightsIdentity removes the default — DELETE /v1/org/rights-identity. The result is the
+// setting now in force.
+func (s *OrgService) RemoveRightsIdentity(ctx context.Context) (Object, error) {
+	return s.c.object(ctx, "DELETE", "/v1/org/rights-identity", nil, nil)
 }
 
 // AssetsService stores images used by banners — /v1/assets.

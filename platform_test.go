@@ -191,3 +191,212 @@ func TestAssetUploadBase64EncodesTheImage(t *testing.T) {
 		t.Errorf("url = %q", got)
 	}
 }
+
+func TestRightsLinksCreateSendsTheSubjectAndOptions(t *testing.T) {
+	c, calls := recorder(t, "application/json", `{"url":"https://cookiemunch.net/r/s1?t=a.b","expiresAt":1}`)
+	ctx := context.Background()
+	out, err := c.RightsLinks.Create(ctx, "s1", RightsLinkInput{Subject: RightsLinkSubject{Email: "p@x.com", UserID: "u-1"}, Rights: []string{"access"}, TTLSeconds: 600})
+	if err != nil || out["url"] != "https://cookiemunch.net/r/s1?t=a.b" {
+		t.Fatalf("out = %v, err = %v", out, err)
+	}
+	_, _ = c.RightsLinks.Create(ctx, "s1", RightsLinkInput{Subject: RightsLinkSubject{Email: "p@x.com"}})
+	first, second := (*calls)[0], (*calls)[1]
+	if first.method != "POST" || first.url != "/v1/sites/s1/rights-links" {
+		t.Errorf("request = %s %s", first.method, first.url)
+	}
+	want := map[string]any{"subject": map[string]any{"email": "p@x.com", "userId": "u-1"}, "rights": []any{"access"}, "ttlSeconds": float64(600)}
+	if !reflect.DeepEqual(first.body, want) {
+		t.Errorf("body = %v", first.body)
+	}
+	if !reflect.DeepEqual(second.body, map[string]any{"subject": map[string]any{"email": "p@x.com"}}) {
+		t.Errorf("minimal body = %v", second.body)
+	}
+}
+
+// The org's own mail provider for rights mail: four operations, the secret only ever sent.
+func TestOrgMailProvider(t *testing.T) {
+	c, calls := recorder(t, "application/json", "{}")
+	ctx := context.Background()
+	_, _ = c.Org.MailProvider(ctx)
+	_, _ = c.Org.SetMailProvider(ctx, MailProviderInput{
+		Provider: "smtp", FromEmail: "p@acme.com", Secret: "pw",
+		SMTP: &MailProviderSMTP{Host: "smtp.acme.com", Port: 587, Security: "starttls", Username: "u"},
+	})
+	_, _ = c.Org.TestMailProvider(ctx, "me@acme.com")
+	_, _ = c.Org.TestMailProvider(ctx, "")
+	_ = c.Org.RemoveMailProvider(ctx)
+	want := []struct{ method, url string }{
+		{"GET", "/v1/org/mail-provider"},
+		{"PUT", "/v1/org/mail-provider"},
+		{"POST", "/v1/org/mail-provider/test"},
+		{"POST", "/v1/org/mail-provider/test"},
+		{"DELETE", "/v1/org/mail-provider"},
+	}
+	for i, w := range want {
+		if (*calls)[i].method != w.method || (*calls)[i].url != w.url {
+			t.Errorf("call %d = %s %s, want %s %s", i, (*calls)[i].method, (*calls)[i].url, w.method, w.url)
+		}
+	}
+	put := map[string]any{"provider": "smtp", "fromEmail": "p@acme.com", "secret": "pw",
+		"smtp": map[string]any{"host": "smtp.acme.com", "port": float64(587), "security": "starttls", "username": "u"}}
+	if !reflect.DeepEqual((*calls)[1].body, put) {
+		t.Errorf("put body = %v", (*calls)[1].body)
+	}
+	if v := (*calls)[2].body["to"]; v != "me@acme.com" {
+		t.Errorf("test to = %v", v)
+	}
+	if _, present := (*calls)[3].body["to"]; present {
+		t.Errorf("an empty recipient must be left out, got %v", (*calls)[3].body)
+	}
+}
+
+func TestRightsPageDomains(t *testing.T) {
+	c, calls := recorder(t, "application/json", "{}")
+	ctx := context.Background()
+	_, _ = c.RightsPage.ListDomains(ctx, "s 1")
+	_, _ = c.RightsPage.AddDomain(ctx, "s", "privacy.acme.com")
+	_, _ = c.RightsPage.VerifyDomain(ctx, "s", "privacy.acme.com")
+	_ = c.RightsPage.RemoveDomain(ctx, "s", "privacy.acme.com")
+	want := []recorded{
+		{"GET", "/v1/sites/s%201/rights-page/domains", nil},
+		{"POST", "/v1/sites/s/rights-page/domains", map[string]any{"hostname": "privacy.acme.com"}},
+		{"POST", "/v1/sites/s/rights-page/domains/privacy.acme.com/verify", nil},
+		{"DELETE", "/v1/sites/s/rights-page/domains/privacy.acme.com", nil},
+	}
+	if len(*calls) != len(want) {
+		t.Fatalf("calls = %v", *calls)
+	}
+	for i, w := range want {
+		g := (*calls)[i]
+		if g.method != w.method || g.url != w.url || (w.body != nil && !reflect.DeepEqual(g.body, w.body)) {
+			t.Errorf("call %d = %+v, want %+v", i, g, w)
+		}
+	}
+}
+
+// The rights page's captcha: the site's own setting and the organisation default.
+func TestRightsCaptcha(t *testing.T) {
+	c, calls := recorder(t, "application/json", "{}")
+	ctx := context.Background()
+	_, _ = c.RightsCaptcha.Get(ctx, "s 1")
+	_, _ = c.RightsCaptcha.Set(ctx, "s1", RightsCaptchaInput{Mode: "own", Provider: "recaptcha_v3", SiteKey: "k-12345678", Secret: "sec", MinScore: 0.7})
+	_, _ = c.RightsCaptcha.Remove(ctx, "s1")
+	_, _ = c.Org.RightsCaptcha(ctx)
+	_, _ = c.Org.SetRightsCaptcha(ctx, RightsCaptchaInput{Mode: "off"})
+	_, _ = c.Org.RemoveRightsCaptcha(ctx)
+	want := []struct{ method, url string }{
+		{"GET", "/v1/sites/s%201/rights-captcha"},
+		{"PUT", "/v1/sites/s1/rights-captcha"},
+		{"DELETE", "/v1/sites/s1/rights-captcha"},
+		{"GET", "/v1/org/rights-captcha"},
+		{"PUT", "/v1/org/rights-captcha"},
+		{"DELETE", "/v1/org/rights-captcha"},
+	}
+	for i, w := range want {
+		if (*calls)[i].method != w.method || (*calls)[i].url != w.url {
+			t.Errorf("call %d = %s %s, want %s %s", i, (*calls)[i].method, (*calls)[i].url, w.method, w.url)
+		}
+	}
+	if !reflect.DeepEqual((*calls)[1].body, map[string]any{"mode": "own", "provider": "recaptcha_v3", "siteKey": "k-12345678", "secret": "sec", "minScore": 0.7}) {
+		t.Errorf("put body = %v", (*calls)[1].body)
+	}
+	if !reflect.DeepEqual((*calls)[4].body, map[string]any{"mode": "off"}) {
+		t.Errorf("off body = %v", (*calls)[4].body)
+	}
+}
+
+func TestRightsPageBodiesAndQuery(t *testing.T) {
+	c, calls := recorder(t, "application/json", "{}")
+	ctx := context.Background()
+	_, _ = c.RightsPage.DryRun(ctx, "s1", Object{"seo": Object{"title": "x"}}, false)
+	_, _ = c.RightsPage.DryRun(ctx, "s1", Object{"v": 1}, true)
+	_, _ = c.RightsPage.Put(ctx, "s1", Object{"v": 1, "baseUpdatedAt": nil})
+	_, _ = c.RightsPage.Publish(ctx, "s1")
+	_, _ = c.RightsPage.Publish(ctx, "s1", WithBaseUpdatedAt(int64(7)))
+	_, _ = c.RightsPage.Publish(ctx, "s1", WithBaseUpdatedAt(nil))
+	_, _ = c.RightsPage.Rollback(ctx, "s1", 2)
+	_, _ = c.RightsPage.Rollback(ctx, "s1", 2, WithBaseUpdatedAt("2026-10-14T00:00:00.000Z"))
+	got := *calls
+	want := []struct {
+		method, url string
+		body        map[string]any
+	}{
+		{"PATCH", "/v1/sites/s1/rights-page?dryRun=1", map[string]any{"seo": map[string]any{"title": "x"}}},
+		{"PUT", "/v1/sites/s1/rights-page?dryRun=1", map[string]any{"v": float64(1)}},
+		{"PUT", "/v1/sites/s1/rights-page", map[string]any{"v": float64(1), "baseUpdatedAt": nil}},
+		{"POST", "/v1/sites/s1/rights-page/publish", map[string]any{}},
+		{"POST", "/v1/sites/s1/rights-page/publish", map[string]any{"baseUpdatedAt": float64(7)}},
+		{"POST", "/v1/sites/s1/rights-page/publish", map[string]any{"baseUpdatedAt": nil}},
+		{"POST", "/v1/sites/s1/rights-page/rollback", map[string]any{"version": float64(2)}},
+		{"POST", "/v1/sites/s1/rights-page/rollback", map[string]any{"version": float64(2), "baseUpdatedAt": "2026-10-14T00:00:00.000Z"}},
+	}
+	if len(got) != len(want) {
+		t.Fatalf("calls = %d, want %d", len(got), len(want))
+	}
+	for i, w := range want {
+		if got[i].method != w.method || got[i].url != w.url || !reflect.DeepEqual(got[i].body, w.body) {
+			t.Errorf("call %d = %s %s %v, want %s %s %v", i, got[i].method, got[i].url, got[i].body, w.method, w.url, w.body)
+		}
+	}
+	// baseUpdatedAt: nil must reach the server as null, not be dropped
+	if _, ok := got[2].body["baseUpdatedAt"]; !ok {
+		t.Error("baseUpdatedAt nil was dropped from PUT")
+	}
+	if _, ok := got[5].body["baseUpdatedAt"]; !ok {
+		t.Error("baseUpdatedAt nil was dropped from publish")
+	}
+}
+
+func TestLintConfigPostsAndReplaceAddsTheFlag(t *testing.T) {
+	c, calls := recorder(t, "application/json", `{"mode":"merged","designWarnings":[],"score":100,"suggestedReject":[]}`)
+	ctx := context.Background()
+	r, err := c.Sites.LintConfig(ctx, "s1", SiteConfig{"banner": map[string]any{"type": "accept-only"}}, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if r["score"] != float64(100) {
+		t.Errorf("score = %v", r["score"])
+	}
+	_, _ = c.Sites.LintConfig(ctx, "s1", SiteConfig{"v": 2}, true)
+	got := *calls
+	if got[0].method != "POST" || got[0].url != "/v1/sites/s1/config/lint" {
+		t.Errorf("call 0 = %s %s", got[0].method, got[0].url)
+	}
+	if !reflect.DeepEqual(got[0].body, map[string]any{"banner": map[string]any{"type": "accept-only"}}) {
+		t.Errorf("body = %v", got[0].body)
+	}
+	if got[1].url != "/v1/sites/s1/config/lint?replace=1" {
+		t.Errorf("call 1 url = %s", got[1].url)
+	}
+}
+
+// The sign-in provider rights requests are verified with: the site's own setting and the organisation default.
+func TestRightsIdentity(t *testing.T) {
+	c, calls := recorder(t, "application/json", "{}")
+	ctx := context.Background()
+	_, _ = c.RightsIdentity.Get(ctx, "s 1")
+	_, _ = c.RightsIdentity.Set(ctx, "s1", RightsIdentityInput{Type: "clerk", Issuer: "https://clerk.acme.example", AuthorizedParties: []string{"https://www.acme.example"}, TrustEmailClaim: true})
+	_, _ = c.RightsIdentity.Remove(ctx, "s1")
+	_, _ = c.Org.RightsIdentity(ctx)
+	_, _ = c.Org.SetRightsIdentity(ctx, RightsIdentityInput{Type: "oidc_jwt", Issuer: "https://id.acme.example", JwksURL: "https://id.acme.example/keys", Audience: "acme-rights", SessionCookieName: "sid"})
+	_, _ = c.Org.RemoveRightsIdentity(ctx)
+	want := []struct{ method, url string }{
+		{"GET", "/v1/sites/s%201/rights-identity"},
+		{"PUT", "/v1/sites/s1/rights-identity"},
+		{"DELETE", "/v1/sites/s1/rights-identity"},
+		{"GET", "/v1/org/rights-identity"},
+		{"PUT", "/v1/org/rights-identity"},
+		{"DELETE", "/v1/org/rights-identity"},
+	}
+	for i, w := range want {
+		if (*calls)[i].method != w.method || (*calls)[i].url != w.url {
+			t.Errorf("call %d = %s %s, want %s %s", i, (*calls)[i].method, (*calls)[i].url, w.method, w.url)
+		}
+	}
+	if !reflect.DeepEqual((*calls)[1].body, map[string]any{"type": "clerk", "issuer": "https://clerk.acme.example", "authorizedParties": []any{"https://www.acme.example"}, "trustEmailClaim": true}) {
+		t.Errorf("put body = %v", (*calls)[1].body)
+	}
+	if !reflect.DeepEqual((*calls)[4].body, map[string]any{"type": "oidc_jwt", "issuer": "https://id.acme.example", "jwksUrl": "https://id.acme.example/keys", "audience": "acme-rights", "sessionCookieName": "sid"}) {
+		t.Errorf("org body = %v", (*calls)[4].body)
+	}
+}

@@ -73,7 +73,7 @@ func TestParity(t *testing.T) {
 				args[j] = placeholderValue(mt.In(j), placeholder)
 			}
 			if mt.IsVariadic() {
-				continue // options-style signatures are not operations
+				args = args[:mt.NumIn()-1] // call with no options (e.g. Publish's WithBaseUpdatedAt)
 			}
 			func() {
 				defer func() { _ = recover() }() // only what reached the wire matters here

@@ -113,6 +113,24 @@ func (s *SitesService) DryRunConfig(ctx context.Context, cbid string, config Sit
 	return out, nil
 }
 
+// LintConfig checks a proposed config for consent-button parity without saving it —
+// POST /v1/sites/{cbid}/config/lint: is "Accept all" more prominent than "Reject all"
+// anywhere (colour, size, placement, copy, custom CSS)? The result carries
+// "designWarnings", "score" (0-100) and "suggestedReject". It checks exactly what the
+// write would store: merged over the stored config as PatchConfig would, or with
+// replace=true replaced as PutConfig would. Needs only sites:read.
+func (s *SitesService) LintConfig(ctx context.Context, cbid string, config SiteConfig, replace bool) (map[string]any, error) {
+	var q url.Values
+	if replace {
+		q = url.Values{"replace": {"1"}}
+	}
+	var out map[string]any
+	if err := s.c.do(ctx, "POST", sitePath(cbid, "/config/lint"), q, config, &out); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // Cookies returns the latest categorized cookie declaration —
 // GET /v1/sites/{cbid}/cookies.
 func (s *SitesService) Cookies(ctx context.Context, cbid string) (*CookieDeclaration, error) {

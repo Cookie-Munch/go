@@ -57,6 +57,7 @@ type Client struct {
 	Vendors     *VendorsService
 	RoPA        *RoPAService
 	BrandKits   *BrandKitsService
+	RightsPage  *RightsPageService
 	Preferences *PreferencesService
 	Members     *MembersService
 	Keys        *KeysService
@@ -64,19 +65,22 @@ type Client struct {
 	Banners     *BannersService
 
 	// The privacy platform beyond the banner, and the reseller API.
-	Identity      *IdentityService
-	Vault         *VaultService
-	Profile       *ProfileService
-	Subscriptions *SubscriptionsService
-	Assessments   *AssessmentsService
-	Discovery     *DiscoveryService
-	AI            *AIService
-	Fulfillment   *FulfillmentService
-	Regulatory    *RegulatoryService
-	Reseller      *ResellerService
-	Subjects      *SubjectsService
-	Org           *OrgService
-	Assets        *AssetsService
+	Identity       *IdentityService
+	Vault          *VaultService
+	Profile        *ProfileService
+	Subscriptions  *SubscriptionsService
+	Assessments    *AssessmentsService
+	Discovery      *DiscoveryService
+	AI             *AIService
+	Fulfillment    *FulfillmentService
+	Regulatory     *RegulatoryService
+	Reseller       *ResellerService
+	Subjects       *SubjectsService
+	RightsLinks    *RightsLinksService
+	RightsCaptcha  *RightsCaptchaService
+	RightsIdentity *RightsIdentityService
+	Org            *OrgService
+	Assets         *AssetsService
 }
 
 // Option configures a Client. Pass options to New.
@@ -127,6 +131,7 @@ func New(apiKey string, opts ...Option) *Client {
 	c.Vendors = &VendorsService{c: c}
 	c.RoPA = &RoPAService{c: c}
 	c.BrandKits = &BrandKitsService{c: c}
+	c.RightsPage = &RightsPageService{c: c}
 	c.Preferences = &PreferencesService{c: c}
 	c.Members = &MembersService{c: c}
 	c.Keys = &KeysService{c: c}
@@ -143,6 +148,9 @@ func New(apiKey string, opts ...Option) *Client {
 	c.Regulatory = &RegulatoryService{c: c}
 	c.Reseller = &ResellerService{c: c}
 	c.Subjects = &SubjectsService{c: c}
+	c.RightsLinks = &RightsLinksService{c: c}
+	c.RightsCaptcha = &RightsCaptchaService{c: c}
+	c.RightsIdentity = &RightsIdentityService{c: c}
 	c.Org = &OrgService{c: c}
 	c.Assets = &AssetsService{c: c}
 	return c

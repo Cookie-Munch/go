@@ -58,7 +58,6 @@ func main() {
 ```go
 cm := cookiemunch.New(
 	"fck_live_your_key_here",
-	cookiemunch.WithBaseURL("https://cmp.example.com"), // default: https://api.cookiemunch.net
 	cookiemunch.WithHTTPClient(&http.Client{Timeout: 10 * time.Second}),
 	cookiemunch.WithUserAgent("my-app/1.2.3"),
 	cookiemunch.WithHeaderAuth(), // send X-API-Key instead of Authorization: Bearer
@@ -118,12 +117,18 @@ if errors.As(err, &apiErr) {
 | Field | Endpoints |
 |---|---|
 | `cm.Me`, `cm.Usage` | `/v1/me`, `/v1/usage` |
-| `cm.Sites` | list/create/get/delete, config, cookies, scan, A/B, snippet, verify, brand, flow (`GetFlow`/`EditFlow`/`SetFlow`), `EnableAdPersonalization`, `Banner`, `Policy` (Markdown), `AnalyzeSession` |
+| `cm.Sites` | list/create/get/delete, config, `LintConfig` (consent-button parity, nothing saved), cookies, scan, A/B, snippet, verify, brand, flow (`GetFlow`/`EditFlow`/`SetFlow`), `EnableAdPersonalization`, `Banner`, `Policy` (Markdown), `AnalyzeSession` |
 | `cm.Consent` | `Ingest` (public), `Stats`, `Log`, `Export`, `Receipt`, `EraseSubject`, `ExportSubject` |
 | `cm.DSAR` | `List`, `Create`, `Advance`, `Response` (plain-text notice) |
 | `cm.Vendors` | `List`, `Create` (with risk scoring) |
 | `cm.RoPA` | `List`, `Create`, `ExportCSV` |
 | `cm.BrandKits` | `List`, `Create`, `Delete` |
+| `cm.RightsPage` | `Get`, `Put`, `Patch`, `DryRun`, `GetPublished`, `Publish`, `Versions`, `Rollback` (pass `WithBaseUpdatedAt(updatedAt)` to `Publish`/`Rollback` so only the draft you read goes live; a rollback replaces the draft); custom domains `ListDomains`, `AddDomain`, `VerifyDomain`, `RemoveDomain` |
+| `cm.RightsLinks` | `Create` — a signed, single-use link to the rights page for a signed-in person |
+| `cm.Org` (mail) | `MailProvider`, `SetMailProvider`, `TestMailProvider`, `RemoveMailProvider` — your own provider for rights-request mail (no code mail until a test succeeds; there is no shared sender) |
+| `cm.Org` (rights defaults) | `RightsCaptcha`, `SetRightsCaptcha`, `RemoveRightsCaptcha`, `RightsIdentity`, `SetRightsIdentity`, `RemoveRightsIdentity` — the default captcha and sign-in provider for sites without their own |
+| `cm.RightsCaptcha` | `Get`, `Set`, `Remove` — a site's own rights-page captcha (your keys, or off) |
+| `cm.RightsIdentity` | `Get`, `Set` (`RightsIdentityInput`), `Remove` — a site's sign-in provider (`clerk`, `atlas` or `oidc_jwt`): a signed-in visitor is verified by their session, with no code mail |
 | `cm.Preferences` | `List`, `Save` |
 | `cm.Members` | `List`, `Invite`, `SetRole`, `Remove` |
 | `cm.Keys` | `List`, `Issue` — set `Scopes` and/or `Cbids` for a least-privilege key |
