@@ -464,8 +464,19 @@ type ExecutorInput struct {
 }
 
 // ConnectExecutor registers a system. The response carries the webhook URL to configure in it.
+// A WebhookSecret of the form whsec_<base64> verifies deliveries signed with its base64-decoded
+// bytes or with the literal string; any other secret only with its UTF-8 bytes.
 func (s *FulfillmentService) ConnectExecutor(ctx context.Context, input ExecutorInput) (Object, error) {
 	return s.c.object(ctx, "POST", "/v1/dsar/executors", nil, input)
+}
+
+// dryRunQuery is ?dryRun=1: validate in full, answer what would happen, store nothing.
+func dryRunQuery() url.Values { return url.Values{"dryRun": {"1"}} }
+
+// DryRunConnectExecutor validates a connection exactly as ConnectExecutor would and returns
+// {dryRun, executor, diff} without storing anything — POST /v1/dsar/executors?dryRun=1.
+func (s *FulfillmentService) DryRunConnectExecutor(ctx context.Context, input ExecutorInput) (Object, error) {
+	return s.c.object(ctx, "POST", "/v1/dsar/executors", dryRunQuery(), input)
 }
 
 // ExecutorUpdate changes a connection in place. Only non-nil fields are sent; the stored
@@ -487,6 +498,42 @@ func ExecutorWebhookSecret(secret string) **string { v := &secret; return &v }
 
 // UpdateExecutor changes a connection in place — PATCH /v1/dsar/executors/{id}.
 func (s *FulfillmentService) UpdateExecutor(ctx context.Context, id string, patch ExecutorUpdate) (Object, error) {
+	return s.c.object(ctx, "PATCH", "/v1/dsar/executors/"+esc(id), nil, executorPatchBody(patch))
+}
+
+// DryRunUpdateExecutor returns the connection as UpdateExecutor would leave it, and a diff,
+// changing nothing — PATCH /v1/dsar/executors/{id}?dryRun=1.
+func (s *FulfillmentService) DryRunUpdateExecutor(ctx context.Context, id string, patch ExecutorUpdate) (Object, error) {
+	return s.c.object(ctx, "PATCH", "/v1/dsar/executors/"+esc(id), dryRunQuery(), executorPatchBody(patch))
+}
+
+// WebhookDelivery is one webhook delivery to check: its headers and the raw body string,
+// exactly the bytes that were signed.
+type WebhookDelivery struct {
+	Headers map[string]string `json:"headers"`
+	Body    string            `json:"body"`
+}
+
+// TestExecutorWebhook runs the receiver's exact check on a delivery and acts on nothing —
+// POST /v1/dsar/executors/{id}/webhook/test. The result is {verified, stage, reason}.
+func (s *FulfillmentService) TestExecutorWebhook(ctx context.Context, id string, delivery WebhookDelivery) (Object, error) {
+	if delivery.Headers == nil {
+		delivery.Headers = map[string]string{}
+	}
+	return s.c.object(ctx, "POST", "/v1/dsar/executors/"+esc(id)+"/webhook/test", nil, delivery)
+}
+
+// ExecutorWebhookDeliveries lists the last 50 deliveries to a connection's webhook, newest
+// first, each with its reason — GET /v1/dsar/executors/{id}/webhook/deliveries.
+func (s *FulfillmentService) ExecutorWebhookDeliveries(ctx context.Context, id string) ([]Object, error) {
+	var out []Object
+	if err := s.c.get(ctx, "/v1/dsar/executors/"+esc(id)+"/webhook/deliveries", nil, &out); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func executorPatchBody(patch ExecutorUpdate) map[string]any {
 	body := map[string]any{}
 	if patch.Profile != nil {
 		body["profile"] = patch.Profile
@@ -507,7 +554,7 @@ func (s *FulfillmentService) UpdateExecutor(ctx context.Context, id string, patc
 	if patch.Auto != nil {
 		body["auto"] = *patch.Auto
 	}
-	return s.c.object(ctx, "PATCH", "/v1/dsar/executors/"+esc(id), nil, body)
+	return body
 }
 
 // ExecutorTest asks a connection to look one person up without filing a request.
@@ -1087,9 +1134,12 @@ func (s *SitesService) ApplyImport(ctx context.Context, cbid, data string, overw
 type DeclaredCookieInput struct {
 	Category string `json:"category"`
 	Purpose  string `json:"purpose"`
-	Provider string `json:"provider,omitempty"`
-	Expiry   string `json:"expiry,omitempty"`
-	Domain   string `json:"domain,omitempty"`
+	// Purposes is the purpose in other languages, keyed by BCP-47 tag ("es", "pt-BR").
+	// Purpose is the fallback for any language it lacks. Left empty, nothing is sent.
+	Purposes map[string]string `json:"purposes,omitempty"`
+	Provider string            `json:"provider,omitempty"`
+	Expiry   string            `json:"expiry,omitempty"`
+	Domain   string            `json:"domain,omitempty"`
 	// Pattern treats the name as a prefix wildcard (a trailing "*" does the same).
 	Pattern bool `json:"pattern,omitempty"`
 }
@@ -1121,6 +1171,30 @@ func (s *SitesService) DeclareCookies(ctx context.Context, cbid string, cookies 
 // scanned classification applies again.
 func (s *SitesService) UndeclareCookie(ctx context.Context, cbid, name string) error {
 	return s.c.do(ctx, "DELETE", sitePath(cbid, "/cookies/"+esc(name)), nil, nil, nil)
+}
+
+var dryRun = url.Values{"dryRun": {"1"}}
+
+// DeclareCookieDryRun validates DeclareCookie and answers with what it would store —
+// "cookie", "declared" (the would-be list) and a "diff" — storing nothing (?dryRun=1).
+func (s *SitesService) DeclareCookieDryRun(ctx context.Context, cbid, name string, in DeclaredCookieInput) (Object, error) {
+	return s.c.object(ctx, "PUT", sitePath(cbid, "/cookies/"+esc(name)), dryRun, in)
+}
+
+// DeclareCookiesDryRun is DeclareCookies with ?dryRun=1: what would be stored, plus a
+// "diff"; nothing is.
+func (s *SitesService) DeclareCookiesDryRun(ctx context.Context, cbid string, cookies []DeclaredCookieItem, replace bool) (Object, error) {
+	body := map[string]any{"cookies": cookies}
+	if replace {
+		body["replace"] = true
+	}
+	return s.c.object(ctx, "PUT", sitePath(cbid, "/cookies"), dryRun, body)
+}
+
+// UndeclareCookieDryRun answers with what removing a declaration would leave —
+// "declared" and a "diff" — and removes nothing (?dryRun=1).
+func (s *SitesService) UndeclareCookieDryRun(ctx context.Context, cbid, name string) (Object, error) {
+	return s.c.object(ctx, "DELETE", sitePath(cbid, "/cookies/"+esc(name)), dryRun, nil)
 }
 
 // Delete removes a stored image — DELETE /v1/assets/{fileName}. Pass the URL Upload

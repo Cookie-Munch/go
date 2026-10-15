@@ -400,3 +400,84 @@ func TestRightsIdentity(t *testing.T) {
 		t.Errorf("org body = %v", (*calls)[4].body)
 	}
 }
+
+func TestExecutorWebhookCheckDeliveriesAndDryRuns(t *testing.T) {
+	c, calls := recorder(t, "application/json", "{}")
+	ctx := context.Background()
+	if _, err := c.Fulfillment.TestExecutorWebhook(ctx, "ex 1", WebhookDelivery{Headers: map[string]string{"x-sig": "v1,abc"}, Body: `{"a":1}`}); err != nil {
+		t.Fatal(err)
+	}
+	_, _ = c.Fulfillment.DryRunConnectExecutor(ctx, ExecutorInput{System: "crm", BaseURL: "https://crm.example", SecretKey: "sk_12345678", Profile: Object{}})
+	no := false
+	_, _ = c.Fulfillment.DryRunUpdateExecutor(ctx, "ex 1", ExecutorUpdate{Auto: &no})
+	_, _ = c.Fulfillment.UpdateExecutor(ctx, "ex 1", ExecutorUpdate{Auto: &no})
+	list, listCalls := recorder(t, "application/json", "[]")
+	if _, err := list.Fulfillment.ExecutorWebhookDeliveries(ctx, "ex 1"); err != nil {
+		t.Fatal(err)
+	}
+	got := []string{}
+	for _, x := range append(*calls, *listCalls...) {
+		got = append(got, x.method+" "+x.url)
+	}
+	want := []string{
+		"POST /v1/dsar/executors/ex%201/webhook/test",
+		"POST /v1/dsar/executors?dryRun=1",
+		"PATCH /v1/dsar/executors/ex%201?dryRun=1",
+		"PATCH /v1/dsar/executors/ex%201",
+		"GET /v1/dsar/executors/ex%201/webhook/deliveries",
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("calls = %v", got)
+	}
+	if !reflect.DeepEqual((*calls)[0].body, map[string]any{"headers": map[string]any{"x-sig": "v1,abc"}, "body": `{"a":1}`}) {
+		t.Errorf("delivery body = %v", (*calls)[0].body)
+	}
+	if !reflect.DeepEqual((*calls)[2].body, map[string]any{"auto": false}) {
+		t.Errorf("dry-run patch body = %v", (*calls)[2].body)
+	}
+}
+
+// Numestri F-01: per-language purposes, and a dry run of every declaration write.
+func TestDeclaredCookiesPurposesAndDryRun(t *testing.T) {
+	c, calls := recorder(t, "application/json", `{"dryRun":true,"declared":[],"diff":{"added":[],"removed":[],"changed":[]}}`)
+	ctx := context.Background()
+	in := DeclaredCookieInput{Category: "necessary", Purpose: "Signed in.", Purposes: map[string]string{"es": "Sesión."}}
+	if _, err := c.Sites.DeclareCookie(ctx, "cb", "sid", in); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := c.Sites.DeclareCookieDryRun(ctx, "cb", "sid", DeclaredCookieInput{Category: "necessary", Purpose: "p"}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := c.Sites.DeclareCookiesDryRun(ctx, "cb", []DeclaredCookieItem{{Name: "a", DeclaredCookieInput: DeclaredCookieInput{Category: "necessary", Purpose: "A"}}}, true); err != nil {
+		t.Fatal(err)
+	}
+	out, err := c.Sites.UndeclareCookieDryRun(ctx, "cb", "sid")
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := []string{}
+	for _, x := range *calls {
+		got = append(got, x.method+" "+x.url)
+	}
+	want := []string{
+		"PUT /v1/sites/cb/cookies/sid",
+		"PUT /v1/sites/cb/cookies/sid?dryRun=1",
+		"PUT /v1/sites/cb/cookies?dryRun=1",
+		"DELETE /v1/sites/cb/cookies/sid?dryRun=1",
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("calls = %v", got)
+	}
+	if p := (*calls)[0].body["purposes"]; !reflect.DeepEqual(p, map[string]any{"es": "Sesión."}) {
+		t.Errorf("purposes = %v", p)
+	}
+	if _, has := (*calls)[1].body["purposes"]; has {
+		t.Error("an empty Purposes must not be sent")
+	}
+	if (*calls)[2].body["replace"] != true {
+		t.Error("replace not sent")
+	}
+	if out["dryRun"] != true {
+		t.Errorf("dry run answer = %v", out)
+	}
+}
