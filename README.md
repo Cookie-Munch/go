@@ -117,7 +117,9 @@ if errors.As(err, &apiErr) {
 | Field | Endpoints |
 |---|---|
 | `cm.Me`, `cm.Usage` | `/v1/me`, `/v1/usage` |
-| `cm.Sites` | list/create/get/delete, config, `LintConfig` (consent-button parity, nothing saved), cookies, scan, A/B, snippet, verify, brand, flow (`GetFlow`/`EditFlow`/`SetFlow`), `EnableAdPersonalization`, `Banner`, `Policy` (Markdown), `AnalyzeSession` |
+| `cm.IntegrationHealth`, `cm.Provision` | `/v1/integration-health`, `/v1/provision` (idempotent, dry run, no secret returned) |
+| `cm.Keys.Report` | key hygiene (unused, broad, expiring soon); `ApiKeyUpdate{ExpiresAt: ClearKeyExpiry()}`; `New(key, WithStrictUnknownFields())` refuses mistyped fields |
+| `cm.Sites` | list/create/get/delete, `Update`/`DryRunUpdate` (rename or move; cbid and ledger stay), `ListPartners`/`LinkPartner`/`UnlinkPartner` (partner links, no secret), config, `LintConfig` (consent-button parity, nothing saved), cookies, scan, A/B, snippet, verify, brand, flow (`GetFlow`/`EditFlow`/`SetFlow`), `EnableAdPersonalization`, `Banner`, `Policy` (Markdown), `AnalyzeSession` |
 | `cm.Consent` | `Ingest` (public), `Stats`, `Log`, `Export`, `Receipt`, `EraseSubject`, `ExportSubject` |
 | `cm.DSAR` | `List`, `Create`, `Advance`, `Response` (plain-text notice) |
 | `cm.Vendors` | `List`, `Create` (with risk scoring) |

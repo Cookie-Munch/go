@@ -322,7 +322,10 @@ type DsarRequest struct {
 	Status       string `json:"status"`     // received | verifying | in_progress | completed | rejected
 	CreatedAt    int64  `json:"createdAt"`
 	DueAt        int64  `json:"dueAt"`
-	Note         string `json:"note,omitempty"`
+	// Note is INTERNAL (intake note plus the /erase and /export audit lines); never shown to the subject.
+	Note string `json:"note,omitempty"`
+	// MessageToSubject is the line the subject reads in the response notice.
+	MessageToSubject string `json:"messageToSubject,omitempty"`
 	// Test marks a test request: off the SLA board, labelled, deletable.
 	Test bool `json:"test,omitempty"`
 }
@@ -333,6 +336,8 @@ type DsarCreate struct {
 	SubjectEmail string `json:"subjectEmail"`
 	Regulation   string `json:"regulation"`
 	Note         string `json:"note,omitempty"`
+	// MessageToSubject is the line the subject reads in the response notice (never an API key).
+	MessageToSubject string `json:"messageToSubject,omitempty"`
 	// Test files a test request: left out of SLA metrics and the deadline board, labelled
 	// as a test, and deletable with DSARService.Delete.
 	Test bool `json:"test,omitempty"`
@@ -468,6 +473,13 @@ type memberWrap struct {
 type ApiKeyPrefix struct {
 	Prefix    string `json:"prefix"`
 	CreatedAt int64  `json:"createdAt,omitempty"`
+	// ExpiresAt is epoch ms the key stops working; nil = never.
+	ExpiresAt *int64   `json:"expiresAt,omitempty"`
+	Name      *string  `json:"name,omitempty"`
+	Scopes    []string `json:"scopes,omitempty"`
+	Cbids     []string `json:"cbids,omitempty"`
+	// LastUsedAt is epoch ms the key last authenticated a request (recorded at most hourly).
+	LastUsedAt *int64 `json:"lastUsedAt,omitempty"`
 }
 
 // ApiKeyIssued is the response of POST /v1/keys. The Key is returned only once.
@@ -486,6 +498,8 @@ type ApiKeyIssueInput struct {
 	Cbids []string `json:"cbids,omitempty"`
 	// ExpiresInDays retires the key after this many days (1–3650). Zero means never.
 	ExpiresInDays int `json:"expiresInDays,omitempty"`
+	// ExpiresAt is when the key stops working, epoch ms (not with ExpiresInDays). Zero means never.
+	ExpiresAt int64 `json:"expiresAt,omitempty"`
 }
 
 // ---- usage ------------------------------------------------------------------

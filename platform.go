@@ -479,6 +479,60 @@ func (s *FulfillmentService) DryRunConnectExecutor(ctx context.Context, input Ex
 	return s.c.object(ctx, "POST", "/v1/dsar/executors", dryRunQuery(), input)
 }
 
+// ExecutorPresetInput connects a system from a versioned preset instead of a hand-written
+// profile: "atlas" (optional AtlasIDAppID), "forumulate" (OrgID), "cm-standard-v1" (BaseURL
+// and System) or "chatly". A preset waiting on another platform's API is refused with 409
+// preset_waiting_on_platform; see ExecutorPresets.
+type ExecutorPresetInput struct {
+	Preset        string `json:"preset"`
+	SecretKey     string `json:"secretKey"`
+	PresetVersion int    `json:"presetVersion,omitempty"`
+	System        string `json:"system,omitempty"`
+	BaseURL       string `json:"baseUrl,omitempty"`
+	OrgID         string `json:"orgId,omitempty"`
+	AtlasIDAppID  string `json:"atlasIdAppId,omitempty"`
+	WebhookSecret string `json:"webhookSecret,omitempty"`
+	Auto          *bool  `json:"auto,omitempty"`
+	Cbid          string `json:"cbid,omitempty"`
+}
+
+// ConnectExecutorPreset registers a system from a preset — POST /v1/dsar/executors {preset}.
+// The response carries presetVersion and presetDiff.
+func (s *FulfillmentService) ConnectExecutorPreset(ctx context.Context, input ExecutorPresetInput) (Object, error) {
+	return s.c.object(ctx, "POST", "/v1/dsar/executors", nil, input)
+}
+
+// DryRunConnectExecutorPreset is ConnectExecutorPreset with ?dryRun=1: nothing is stored.
+func (s *FulfillmentService) DryRunConnectExecutorPreset(ctx context.Context, input ExecutorPresetInput) (Object, error) {
+	return s.c.object(ctx, "POST", "/v1/dsar/executors", dryRunQuery(), input)
+}
+
+// ExecutorPresets lists the versioned presets, whether each is usable now or waits on
+// another platform, and the organisation's canary address — GET /v1/dsar/executors/presets.
+func (s *FulfillmentService) ExecutorPresets(ctx context.Context) (Object, error) {
+	return s.c.object(ctx, "GET", "/v1/dsar/executors/presets", nil, nil)
+}
+
+// ExecutorPresetUpgrade is what UpgradeExecutorPreset sends: a version, a preset to adopt
+// (on a hand-written connection), or params to add. All optional.
+type ExecutorPresetUpgrade struct {
+	Preset        string `json:"preset,omitempty"`
+	PresetVersion int    `json:"presetVersion,omitempty"`
+	OrgID         string `json:"orgId,omitempty"`
+	AtlasIDAppID  string `json:"atlasIdAppId,omitempty"`
+}
+
+// UpgradeExecutorPreset rebuilds a connection from its preset's latest version, keeping its
+// id and credential, and answers with a diff — POST /v1/dsar/executors/{id}/upgrade-preset.
+func (s *FulfillmentService) UpgradeExecutorPreset(ctx context.Context, id string, input ExecutorPresetUpgrade) (Object, error) {
+	return s.c.object(ctx, "POST", "/v1/dsar/executors/"+esc(id)+"/upgrade-preset", nil, input)
+}
+
+// DryRunUpgradeExecutorPreset answers what UpgradeExecutorPreset would change, changing nothing.
+func (s *FulfillmentService) DryRunUpgradeExecutorPreset(ctx context.Context, id string, input ExecutorPresetUpgrade) (Object, error) {
+	return s.c.object(ctx, "POST", "/v1/dsar/executors/"+esc(id)+"/upgrade-preset", dryRunQuery(), input)
+}
+
 // ExecutorUpdate changes a connection in place. Only non-nil fields are sent; the stored
 // credential is kept unless SecretKey is set. WebhookSecret follows the three-way rule: nil
 // leaves it, ClearExecutorWebhookSecret() removes it, ExecutorWebhookSecret(v) replaces it.
@@ -559,9 +613,11 @@ func executorPatchBody(patch ExecutorUpdate) map[string]any {
 
 // ExecutorTest asks a connection to look one person up without filing a request.
 // Operation is locate (default), export or erase; Open on an export opens and polls a real
-// export once. An erasure is never sent by a test.
+// export once. An erasure is never sent by a test. Canary (instead of Email) uses the org
+// canary address — no real person — and a canary locate updates the connection's health.
 type ExecutorTest struct {
-	Email     string `json:"email"`
+	Email     string `json:"email,omitempty"`
+	Canary    bool   `json:"canary,omitempty"`
 	Operation string `json:"operation,omitempty"`
 	Open      bool   `json:"open,omitempty"`
 }
@@ -1142,6 +1198,73 @@ type DeclaredCookieInput struct {
 	Domain   string            `json:"domain,omitempty"`
 	// Pattern treats the name as a prefix wildcard (a trailing "*" does the same).
 	Pattern bool `json:"pattern,omitempty"`
+	// Type declares browser storage instead of a cookie: "localStorage", "sessionStorage"
+	// or "indexedDB". Left empty, it is a cookie.
+	Type string `json:"type,omitempty"`
+}
+
+// CookiePresetParams are a vendor preset's parameters: Atlas FrontendAPIHost and
+// CrossSubdomainCookies; Chatly PublicID, Dragging and Category.
+type CookiePresetParams struct {
+	FrontendAPIHost       string `json:"frontendApiHost,omitempty"`
+	CrossSubdomainCookies *bool  `json:"crossSubdomainCookies,omitempty"`
+	PublicID              string `json:"publicId,omitempty"`
+	Dragging              bool   `json:"dragging,omitempty"`
+	Category              string `json:"category,omitempty"`
+}
+
+// PurgeObservedInput is the window of a purge: Since (and optionally Until), ISO-8601.
+type PurgeObservedInput struct {
+	Since string `json:"since"`
+	Until string `json:"until,omitempty"`
+}
+
+// CookiePresets lists every declaration preset (atlas, forumulate, chatly, cookiemunch) —
+// GET /v1/sites/{cbid}/cookies/presets: parameters, what each declared here, and whether
+// the vendor's manifest exists yet.
+func (s *SitesService) CookiePresets(ctx context.Context, cbid string) (Object, error) {
+	return s.c.object(ctx, "GET", sitePath(cbid, "/cookies/presets"), nil, nil)
+}
+
+// ApplyCookiePreset applies (or re-syncs) a vendor preset — PUT
+// /v1/sites/{cbid}/cookies/presets/{vendor}: declares what that platform writes, marked
+// "vendor". Names you declared yourself are kept ("skipped").
+func (s *SitesService) ApplyCookiePreset(ctx context.Context, cbid, vendor string, in CookiePresetParams) (Object, error) {
+	return s.c.object(ctx, "PUT", sitePath(cbid, "/cookies/presets/"+esc(vendor)), nil, in)
+}
+
+// ApplyCookiePresetDryRun is ApplyCookiePreset with ?dryRun=1; nothing is stored.
+func (s *SitesService) ApplyCookiePresetDryRun(ctx context.Context, cbid, vendor string, in CookiePresetParams) (Object, error) {
+	return s.c.object(ctx, "PUT", sitePath(cbid, "/cookies/presets/"+esc(vendor)), dryRun, in)
+}
+
+// RemoveCookiePreset removes every declaration a vendor preset made — DELETE
+// /v1/sites/{cbid}/cookies/presets/{vendor}.
+func (s *SitesService) RemoveCookiePreset(ctx context.Context, cbid, vendor string) (Object, error) {
+	return s.c.object(ctx, "DELETE", sitePath(cbid, "/cookies/presets/"+esc(vendor)), nil, nil)
+}
+
+// DeleteObservedCookie removes every stored (scanned or observed) row of this name — DELETE
+// /v1/sites/{cbid}/observed-cookies/{name}. A declaration of it stays.
+func (s *SitesService) DeleteObservedCookie(ctx context.Context, cbid, name string) error {
+	return s.c.do(ctx, "DELETE", sitePath(cbid, "/observed-cookies/"+esc(name)), nil, nil, nil)
+}
+
+// DeleteObservedCookieDryRun answers with what DeleteObservedCookie would remove (?dryRun=1).
+func (s *SitesService) DeleteObservedCookieDryRun(ctx context.Context, cbid, name string) (Object, error) {
+	return s.c.object(ctx, "DELETE", sitePath(cbid, "/observed-cookies/"+esc(name)), dryRun, nil)
+}
+
+// PurgeObservedCookies purges observed since T — POST /v1/sites/{cbid}/observed-cookies/purge:
+// every row a real visit first reported at or after Since (and before Until). Crawled rows and
+// declarations stay.
+func (s *SitesService) PurgeObservedCookies(ctx context.Context, cbid string, in PurgeObservedInput) (Object, error) {
+	return s.c.object(ctx, "POST", sitePath(cbid, "/observed-cookies/purge"), nil, in)
+}
+
+// PurgeObservedCookiesDryRun is PurgeObservedCookies with ?dryRun=1; nothing is removed.
+func (s *SitesService) PurgeObservedCookiesDryRun(ctx context.Context, cbid string, in PurgeObservedInput) (Object, error) {
+	return s.c.object(ctx, "POST", sitePath(cbid, "/observed-cookies/purge"), dryRun, in)
 }
 
 // DeclaredCookieItem is one entry of a bulk declaration.
@@ -1252,6 +1375,28 @@ type ApiKeyUpdate struct {
 	Name   *string
 	Scopes []string
 	Cbids  []string
+	// ExpiresAt follows the three-way rule: nil leaves it, ClearKeyExpiry() removes it,
+	// KeyExpiresAt(ms) sets it.
+	ExpiresAt **int64
+}
+
+// ClearKeyExpiry removes a key's expiry.
+func ClearKeyExpiry() **int64 { var none *int64; return &none }
+
+// KeyExpiresAt sets a key's expiry (epoch ms).
+func KeyExpiresAt(ms int64) **int64 { v := &ms; return &v }
+
+// Report returns key hygiene — GET /v1/keys/report: keys unused for unusedDays (0 = default
+// 90), keys with broad access, and keys expiring within expiringDays (0 = default 14).
+func (s *KeysService) Report(ctx context.Context, unusedDays, expiringDays int) (Object, error) {
+	q := url.Values{}
+	if unusedDays > 0 {
+		q.Set("unusedDays", strconv.Itoa(unusedDays))
+	}
+	if expiringDays > 0 {
+		q.Set("expiringDays", strconv.Itoa(expiringDays))
+	}
+	return s.c.object(ctx, "GET", "/v1/keys/report", q, nil)
 }
 
 // Update changes a key's name, scopes or property lock — PATCH /v1/keys/{prefix}.
@@ -1265,6 +1410,13 @@ func (s *KeysService) Update(ctx context.Context, prefix string, patch ApiKeyUpd
 	}
 	if patch.Cbids != nil {
 		body["cbids"] = patch.Cbids
+	}
+	if patch.ExpiresAt != nil {
+		if *patch.ExpiresAt == nil {
+			body["expiresAt"] = nil
+		} else {
+			body["expiresAt"] = **patch.ExpiresAt
+		}
 	}
 	return s.c.object(ctx, "PATCH", "/v1/keys/"+esc(prefix), nil, body)
 }

@@ -547,3 +547,34 @@ func TestScanWaitAndWaitForScan(t *testing.T) {
 		t.Errorf("calls = %v", got)
 	}
 }
+
+func TestExecutorPresetsCanaryAndUpgrade(t *testing.T) {
+	c, calls := recorder(t, "application/json", "{}")
+	ctx := context.Background()
+	_, _ = c.Fulfillment.ExecutorPresets(ctx)
+	_, _ = c.Fulfillment.ConnectExecutorPreset(ctx, ExecutorPresetInput{Preset: "forumulate", SecretKey: "fck_12345678", OrgID: "org-1"})
+	_, _ = c.Fulfillment.TestExecutor(ctx, "ex 1", ExecutorTest{Canary: true})
+	_, _ = c.Fulfillment.DryRunUpgradeExecutorPreset(ctx, "ex 1", ExecutorPresetUpgrade{AtlasIDAppID: "app_1"})
+	got := []string{}
+	for _, x := range *calls {
+		got = append(got, x.method+" "+x.url)
+	}
+	want := []string{
+		"GET /v1/dsar/executors/presets",
+		"POST /v1/dsar/executors",
+		"POST /v1/dsar/executors/ex%201/test",
+		"POST /v1/dsar/executors/ex%201/upgrade-preset?dryRun=1",
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("calls = %v", got)
+	}
+	if !reflect.DeepEqual((*calls)[1].body, map[string]any{"preset": "forumulate", "secretKey": "fck_12345678", "orgId": "org-1"}) {
+		t.Errorf("preset body = %v", (*calls)[1].body)
+	}
+	if !reflect.DeepEqual((*calls)[2].body, map[string]any{"canary": true}) {
+		t.Errorf("canary body = %v", (*calls)[2].body)
+	}
+	if !reflect.DeepEqual((*calls)[3].body, map[string]any{"atlasIdAppId": "app_1"}) {
+		t.Errorf("upgrade body = %v", (*calls)[3].body)
+	}
+}

@@ -28,11 +28,16 @@ func (s *DSARService) Create(ctx context.Context, input DsarCreate) (*DsarReques
 	return &out.Request, nil
 }
 
-// Advance moves a DSAR to a new status — POST /v1/dsar/{id}/advance.
-func (s *DSARService) Advance(ctx context.Context, id, toStatus string) (*DsarRequest, error) {
+// Advance moves a DSAR to a new status — POST /v1/dsar/{id}/advance. An optional
+// messageToSubject replaces the line the subject reads in the notice.
+func (s *DSARService) Advance(ctx context.Context, id, toStatus string, messageToSubject ...string) (*DsarRequest, error) {
 	var out dsarWrap
 	path := "/v1/dsar/" + url.PathEscape(id) + "/advance"
-	if err := s.c.post(ctx, path, map[string]string{"toStatus": toStatus}, &out); err != nil {
+	body := map[string]string{"toStatus": toStatus}
+	if len(messageToSubject) > 0 {
+		body["messageToSubject"] = messageToSubject[0]
+	}
+	if err := s.c.post(ctx, path, body, &out); err != nil {
 		return nil, err
 	}
 	return &out.Request, nil

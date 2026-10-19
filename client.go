@@ -48,6 +48,8 @@ type Client struct {
 	baseURL    string
 	httpClient *http.Client
 	userAgent  string
+	// strict sends "Prefer: strict-unknown-fields" on writes (WithStrictUnknownFields).
+	strict bool
 	auth       authStyle
 
 	// Resource groups. Each mirrors a section of the TypeScript SDK surface.
@@ -111,6 +113,12 @@ func WithUserAgent(ua string) Option {
 // default "Authorization: Bearer <key>". Both are accepted by the server.
 func WithHeaderAuth() Option {
 	return func(c *Client) { c.auth = authHeader }
+}
+
+// WithStrictUnknownFields sends "Prefer: strict-unknown-fields" on every write: a body field the
+// API does not declare is refused (400 unknown_field) instead of ignored.
+func WithStrictUnknownFields() Option {
+	return func(c *Client) { c.strict = true }
 }
 
 // New creates a Client authenticating with apiKey (an "fck_..." developer key).
@@ -319,6 +327,9 @@ func (c *Client) do(ctx context.Context, method, path string, query url.Values, 
 		req.Header.Set("Content-Type", "application/json")
 	}
 	req.Header.Set("Accept", "application/json")
+	if c.strict && method != http.MethodGet {
+		req.Header.Set("Prefer", "strict-unknown-fields")
+	}
 	if c.userAgent != "" {
 		req.Header.Set("User-Agent", c.userAgent)
 	}
