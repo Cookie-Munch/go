@@ -29,7 +29,7 @@ import (
 const DefaultBaseURL = "https://api.cookiemunch.net"
 
 // defaultUserAgent is sent on every request unless overridden with WithUserAgent.
-const defaultUserAgent = "cookiemunch-go/1.0"
+const defaultUserAgent = "cookiemunch-go/0.1.0"
 
 // authStyle selects how the API key is presented to the server.
 type authStyle int

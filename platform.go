@@ -1204,13 +1204,15 @@ type DeclaredCookieInput struct {
 }
 
 // CookiePresetParams are a vendor preset's parameters: Atlas FrontendAPIHost and
-// CrossSubdomainCookies; Chatly PublicID, Dragging and Category.
+// CrossSubdomainCookies; Chatly PublicID, Dragging and Category; Referally CookieDomain, CookieDays and Category.
 type CookiePresetParams struct {
 	FrontendAPIHost       string `json:"frontendApiHost,omitempty"`
 	CrossSubdomainCookies *bool  `json:"crossSubdomainCookies,omitempty"`
 	PublicID              string `json:"publicId,omitempty"`
 	Dragging              bool   `json:"dragging,omitempty"`
 	Category              string `json:"category,omitempty"`
+	CookieDomain          string `json:"cookieDomain,omitempty"`
+	CookieDays            int    `json:"cookieDays,omitempty"`
 }
 
 // PurgeObservedInput is the window of a purge: Since (and optionally Until), ISO-8601.
@@ -1219,7 +1221,7 @@ type PurgeObservedInput struct {
 	Until string `json:"until,omitempty"`
 }
 
-// CookiePresets lists every declaration preset (atlas, forumulate, chatly, cookiemunch) —
+// CookiePresets lists every declaration preset (atlas, forumulate, chatly, cookiemunch, referally) —
 // GET /v1/sites/{cbid}/cookies/presets: parameters, what each declared here, and whether
 // the vendor's manifest exists yet.
 func (s *SitesService) CookiePresets(ctx context.Context, cbid string) (Object, error) {

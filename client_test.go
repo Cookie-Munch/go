@@ -286,3 +286,24 @@ func TestEditFlowSerializesOps(t *testing.T) {
 		t.Errorf("serialized operations = %+v", body.Operations)
 	}
 }
+
+func TestUserAgentDefaultAndOverride(t *testing.T) {
+	var got string
+	h := func(w http.ResponseWriter, r *http.Request) {
+		got = r.Header.Get("User-Agent")
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte("{}"))
+	}
+	if _, err := newTestClient(t, h).Me(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if got != "cookiemunch-go/0.1.0" {
+		t.Errorf("default User-Agent = %q", got)
+	}
+	if _, err := newTestClient(t, h, WithUserAgent("acme/2")).Me(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if got != "acme/2" {
+		t.Errorf("overridden User-Agent = %q", got)
+	}
+}
