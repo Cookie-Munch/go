@@ -932,6 +932,52 @@ func (s *RightsLinksService) Create(ctx context.Context, cbid string, in RightsL
 	return s.c.object(ctx, "POST", sitePath(cbid, "/rights-links"), nil, in)
 }
 
+// PreferenceCenterService is the hosted preference centre, opened for a visitor your server has
+// signed in.
+type PreferenceCenterService struct{ c *Client }
+
+// CenterTokenInput names who a preference-centre token is for: a site of your organisation and
+// exactly one of Email (resolved as the emailed preference link resolves it) or SubjectID.
+// TTLSeconds is 1..86400 (default 3600). Zero values are not sent.
+type CenterTokenInput struct {
+	CBID       string `json:"cbid"`
+	Email      string `json:"email,omitempty"`
+	SubjectID  string `json:"subjectId,omitempty"`
+	TTLSeconds int    `json:"ttlSeconds,omitempty"`
+}
+
+// MintToken mints a preference-centre token — POST /v1/preference-center/tokens — for the page
+// to pass to CookieMunch.setSubjectToken. The result carries "token" and "expiresAt". The token
+// is a credential: never put it in a shared URL or a log. Needs subscriptions:write and
+// profile:write, plus identity:read by email.
+func (s *PreferenceCenterService) MintToken(ctx context.Context, in CenterTokenInput) (Object, error) {
+	return s.c.object(ctx, "POST", "/v1/preference-center/tokens", nil, in)
+}
+
+// ConsentSyncSecretService is a site's consent-sync signing secret. Your server signs
+// consent-sync tokens with it so a signed-in visitor's consent decision follows them across
+// browsers (hosted consent sync). Reading needs sites:read; Rotate and Remove need sites:write
+// and consent:write.
+type ConsentSyncSecretService struct{ c *Client }
+
+// Get says whether it is set up — GET /v1/sites/{cbid}/consent-sync-secret ("configured",
+// "secretLast4", "createdAt"). Never the secret.
+func (s *ConsentSyncSecretService) Get(ctx context.Context, cbid string) (Object, error) {
+	return s.c.object(ctx, "GET", sitePath(cbid, "/consent-sync-secret"), nil, nil)
+}
+
+// Rotate mints the secret, or replaces it (the old one stops at once) — POST
+// /v1/sites/{cbid}/consent-sync-secret. The result's "secret" is shown this once: keep it on
+// your server, never in a page.
+func (s *ConsentSyncSecretService) Rotate(ctx context.Context, cbid string) (Object, error) {
+	return s.c.object(ctx, "POST", sitePath(cbid, "/consent-sync-secret"), nil, nil)
+}
+
+// Remove deletes it — DELETE /v1/sites/{cbid}/consent-sync-secret: hosted consent sync stops.
+func (s *ConsentSyncSecretService) Remove(ctx context.Context, cbid string) (Object, error) {
+	return s.c.object(ctx, "DELETE", sitePath(cbid, "/consent-sync-secret"), nil, nil)
+}
+
 // RightsCaptchaService is a site's rights-page captcha: your own Turnstile, hCaptcha or
 // reCAPTCHA keys (recommended), or off. A site without its own setting uses the organisation
 // default (Org.RightsCaptcha), else off. Cookie Munch's own captcha is never used on rights
@@ -1081,6 +1127,34 @@ type MailProviderInput struct {
 	Secret    string            `json:"secret,omitempty"`
 	SES       *MailProviderSES  `json:"ses,omitempty"`
 	SMTP      *MailProviderSMTP `json:"smtp,omitempty"`
+}
+
+// OrgControllerInput is the organisation's own data-controller identity. LegalName is required;
+// a field left empty is left out, and PUT replaces the stored identity, so it is removed.
+type OrgControllerInput struct {
+	LegalName    string `json:"legalName"`
+	ContactEmail string `json:"contactEmail,omitempty"`
+	Address      string `json:"address,omitempty"`
+	DpoContact   string `json:"dpoContact,omitempty"`
+}
+
+// Controller returns your organisation's own data-controller identity — GET /v1/org/controller.
+// Every rights notice names it, before any site config controller block. "set" is false when
+// there is none.
+func (s *OrgService) Controller(ctx context.Context) (Object, error) {
+	return s.c.object(ctx, "GET", "/v1/org/controller", nil, nil)
+}
+
+// SetController sets the organisation's data-controller identity — PUT /v1/org/controller. It
+// replaces the stored one. Needs an unscoped key or rights:write.
+func (s *OrgService) SetController(ctx context.Context, in OrgControllerInput) (Object, error) {
+	return s.c.object(ctx, "PUT", "/v1/org/controller", nil, in)
+}
+
+// RemoveController removes it — DELETE /v1/org/controller. Notices then name the site config
+// controller block.
+func (s *OrgService) RemoveController(ctx context.Context) error {
+	return s.c.delete(ctx, "/v1/org/controller")
 }
 
 // MailProvider returns your own mail provider for rights-request mail — GET /v1/org/mail-provider.

@@ -215,6 +215,28 @@ func TestRightsLinksCreateSendsTheSubjectAndOptions(t *testing.T) {
 }
 
 // The org's own mail provider for rights mail: four operations, the secret only ever sent.
+func TestOrgController(t *testing.T) {
+	c, calls := recorder(t, "application/json", "{}")
+	ctx := context.Background()
+	_, _ = c.Org.Controller(ctx)
+	_, _ = c.Org.SetController(ctx, OrgControllerInput{LegalName: "Crossly Ltd", ContactEmail: "p@crossly.example"})
+	_ = c.Org.RemoveController(ctx)
+	want := []struct{ method, url string }{
+		{"GET", "/v1/org/controller"},
+		{"PUT", "/v1/org/controller"},
+		{"DELETE", "/v1/org/controller"},
+	}
+	for i, w := range want {
+		if (*calls)[i].method != w.method || (*calls)[i].url != w.url {
+			t.Errorf("call %d = %s %s, want %s %s", i, (*calls)[i].method, (*calls)[i].url, w.method, w.url)
+		}
+	}
+	put := map[string]any{"legalName": "Crossly Ltd", "contactEmail": "p@crossly.example"}
+	if !reflect.DeepEqual((*calls)[1].body, put) {
+		t.Errorf("put body = %v", (*calls)[1].body)
+	}
+}
+
 func TestOrgMailProvider(t *testing.T) {
 	c, calls := recorder(t, "application/json", "{}")
 	ctx := context.Background()
@@ -271,6 +293,53 @@ func TestRightsPageDomains(t *testing.T) {
 		g := (*calls)[i]
 		if g.method != w.method || g.url != w.url || (w.body != nil && !reflect.DeepEqual(g.body, w.body)) {
 			t.Errorf("call %d = %+v, want %+v", i, g, w)
+		}
+	}
+}
+
+// A site's consent-sync signing secret.
+func TestConsentSyncSecret(t *testing.T) {
+	c, calls := recorder(t, "application/json", "{}")
+	ctx := context.Background()
+	_, _ = c.ConsentSyncSecret.Get(ctx, "s 1")
+	_, _ = c.ConsentSyncSecret.Rotate(ctx, "s1")
+	_, _ = c.ConsentSyncSecret.Remove(ctx, "s1")
+	want := []struct{ method, url string }{
+		{"GET", "/v1/sites/s%201/consent-sync-secret"},
+		{"POST", "/v1/sites/s1/consent-sync-secret"},
+		{"DELETE", "/v1/sites/s1/consent-sync-secret"},
+	}
+	for i, w := range want {
+		if (*calls)[i].method != w.method || (*calls)[i].url != w.url {
+			t.Errorf("call %d = %s %s, want %s %s", i, (*calls)[i].method, (*calls)[i].url, w.method, w.url)
+		}
+	}
+}
+
+// A preference-centre token for a signed-in visitor: only the fields given are sent.
+func TestPreferenceCenterMintToken(t *testing.T) {
+	c, calls := recorder(t, "application/json", `{"token":"t","expiresAt":"2026-01-01T00:00:00.000Z"}`)
+	ctx := context.Background()
+	out, err := c.PreferenceCenter.MintToken(ctx, CenterTokenInput{CBID: "cb1", Email: "a@x.com"})
+	if err != nil || out["token"] != "t" {
+		t.Fatalf("out = %v, err = %v", out, err)
+	}
+	_, _ = c.PreferenceCenter.MintToken(ctx, CenterTokenInput{CBID: "cb1", SubjectID: "u1", TTLSeconds: 60})
+	for i, want := range []map[string]any{
+		{"cbid": "cb1", "email": "a@x.com"},
+		{"cbid": "cb1", "subjectId": "u1", "ttlSeconds": float64(60)},
+	} {
+		got := (*calls)[i]
+		if got.method != "POST" || got.url != "/v1/preference-center/tokens" {
+			t.Errorf("call %d = %s %s", i, got.method, got.url)
+		}
+		if len(got.body) != len(want) {
+			t.Errorf("call %d body = %v, want %v", i, got.body, want)
+		}
+		for k, v := range want {
+			if got.body[k] != v {
+				t.Errorf("call %d body[%s] = %v, want %v", i, k, got.body[k], v)
+			}
 		}
 	}
 }

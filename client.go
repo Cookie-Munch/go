@@ -50,7 +50,7 @@ type Client struct {
 	userAgent  string
 	// strict sends "Prefer: strict-unknown-fields" on writes (WithStrictUnknownFields).
 	strict bool
-	auth       authStyle
+	auth   authStyle
 
 	// Resource groups. Each mirrors a section of the TypeScript SDK surface.
 	Sites       *SitesService
@@ -67,22 +67,24 @@ type Client struct {
 	Banners     *BannersService
 
 	// The privacy platform beyond the banner, and the reseller API.
-	Identity       *IdentityService
-	Vault          *VaultService
-	Profile        *ProfileService
-	Subscriptions  *SubscriptionsService
-	Assessments    *AssessmentsService
-	Discovery      *DiscoveryService
-	AI             *AIService
-	Fulfillment    *FulfillmentService
-	Regulatory     *RegulatoryService
-	Reseller       *ResellerService
-	Subjects       *SubjectsService
-	RightsLinks    *RightsLinksService
-	RightsCaptcha  *RightsCaptchaService
-	RightsIdentity *RightsIdentityService
-	Org            *OrgService
-	Assets         *AssetsService
+	Identity          *IdentityService
+	Vault             *VaultService
+	Profile           *ProfileService
+	Subscriptions     *SubscriptionsService
+	Assessments       *AssessmentsService
+	Discovery         *DiscoveryService
+	AI                *AIService
+	Fulfillment       *FulfillmentService
+	Regulatory        *RegulatoryService
+	Reseller          *ResellerService
+	Subjects          *SubjectsService
+	RightsLinks       *RightsLinksService
+	RightsCaptcha     *RightsCaptchaService
+	ConsentSyncSecret *ConsentSyncSecretService
+	PreferenceCenter  *PreferenceCenterService
+	RightsIdentity    *RightsIdentityService
+	Org               *OrgService
+	Assets            *AssetsService
 }
 
 // Option configures a Client. Pass options to New.
@@ -158,6 +160,8 @@ func New(apiKey string, opts ...Option) *Client {
 	c.Subjects = &SubjectsService{c: c}
 	c.RightsLinks = &RightsLinksService{c: c}
 	c.RightsCaptcha = &RightsCaptchaService{c: c}
+	c.ConsentSyncSecret = &ConsentSyncSecretService{c: c}
+	c.PreferenceCenter = &PreferenceCenterService{c: c}
 	c.RightsIdentity = &RightsIdentityService{c: c}
 	c.Org = &OrgService{c: c}
 	c.Assets = &AssetsService{c: c}
