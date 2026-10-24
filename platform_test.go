@@ -624,6 +624,7 @@ func TestExecutorPresetsCanaryAndUpgrade(t *testing.T) {
 	_, _ = c.Fulfillment.ConnectExecutorPreset(ctx, ExecutorPresetInput{Preset: "forumulate", SecretKey: "fck_12345678", OrgID: "org-1"})
 	_, _ = c.Fulfillment.TestExecutor(ctx, "ex 1", ExecutorTest{Canary: true})
 	_, _ = c.Fulfillment.DryRunUpgradeExecutorPreset(ctx, "ex 1", ExecutorPresetUpgrade{AtlasIDAppID: "app_1"})
+	_, _ = c.Fulfillment.Executor(ctx, "ex 1")
 	got := []string{}
 	for _, x := range *calls {
 		got = append(got, x.method+" "+x.url)
@@ -633,6 +634,7 @@ func TestExecutorPresetsCanaryAndUpgrade(t *testing.T) {
 		"POST /v1/dsar/executors",
 		"POST /v1/dsar/executors/ex%201/test",
 		"POST /v1/dsar/executors/ex%201/upgrade-preset?dryRun=1",
+		"GET /v1/dsar/executors/ex%201",
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("calls = %v", got)

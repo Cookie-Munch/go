@@ -260,6 +260,24 @@ func (s *SitesService) Verify(ctx context.Context, cbid, method string) (*Verify
 	return &out, nil
 }
 
+// GetBrand reads back the brand.json last imported for the site — GET /v1/sites/{cbid}/brand:
+// each role, the theme token it sets, its source ("brand.json" or "site"), ignored[] and warnings[].
+func (s *SitesService) GetBrand(ctx context.Context, cbid string) (Object, error) {
+	return s.c.object(ctx, "GET", sitePath(cbid, "/brand"), nil, nil)
+}
+
+// SetBrand imports a DTCG brand.json into the site's banner theme (the rights page uses it too)
+// — PUT /v1/sites/{cbid}/brand. input is {"url": "https://…"} or the brand.json document. Values
+// the site set itself are kept (brand.json < site banner theme < per-banner variant). dryRun
+// answers the read-back and saves nothing.
+func (s *SitesService) SetBrand(ctx context.Context, cbid string, input Object, dryRun bool) (Object, error) {
+	var q url.Values
+	if dryRun {
+		q = url.Values{"dryRun": {"1"}}
+	}
+	return s.c.object(ctx, "PUT", sitePath(cbid, "/brand"), q, input)
+}
+
 // Brand suggests theme tokens by extracting the site's brand —
 // POST /v1/sites/{cbid}/brand.
 func (s *SitesService) Brand(ctx context.Context, cbid string) (*BrandExtractionResult, error) {

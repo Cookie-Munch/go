@@ -51,6 +51,9 @@ type Client struct {
 	// strict sends "Prefer: strict-unknown-fields" on writes (WithStrictUnknownFields).
 	strict bool
 	auth   authStyle
+	// secretRecipient seals once-shown secrets (WithSecretRecipient); headers go on every request (WithHeader).
+	secretRecipient string
+	headers         map[string]string
 
 	// Resource groups. Each mirrors a section of the TypeScript SDK surface.
 	Sites       *SitesService
@@ -83,8 +86,12 @@ type Client struct {
 	ConsentSyncSecret *ConsentSyncSecretService
 	PreferenceCenter  *PreferenceCenterService
 	RightsIdentity    *RightsIdentityService
+	DsarSettings      *DsarSettingsService
+	Integrations      *IntegrationsService
 	Org               *OrgService
 	Assets            *AssetsService
+	Metadata          *MetadataService
+	PartnerLinks      *PartnerLinksService
 }
 
 // Option configures a Client. Pass options to New.
@@ -123,7 +130,24 @@ func WithStrictUnknownFields() Option {
 	return func(c *Client) { c.strict = true }
 }
 
-// New creates a Client authenticating with apiKey (an "fck_..." developer key).
+// WithSecretRecipient seals every once-shown secret to this X25519 public key ("x25519:<base64>"):
+// answers carry "sealed_secret" (a libsodium sealed box) and "sealed_field" instead of the plaintext.
+func WithSecretRecipient(recipient string) Option {
+	return func(c *Client) { c.secretRecipient = recipient }
+}
+
+// WithHeader sends an extra header on every request, e.g. WithHeader("Idempotency-Key", ref+":"+run)
+// on a client made for one create: a retry replays the first answer for 24 hours.
+func WithHeader(name, value string) Option {
+	return func(c *Client) {
+		if c.headers == nil {
+			c.headers = map[string]string{}
+		}
+		c.headers[name] = value
+	}
+}
+
+// New creates a Client authenticating with apiKey (a "cookiemunch_live_..." developer key, or a legacy "fck_..." one).
 func New(apiKey string, opts ...Option) *Client {
 	c := &Client{
 		apiKey:     apiKey,
@@ -163,8 +187,12 @@ func New(apiKey string, opts ...Option) *Client {
 	c.ConsentSyncSecret = &ConsentSyncSecretService{c: c}
 	c.PreferenceCenter = &PreferenceCenterService{c: c}
 	c.RightsIdentity = &RightsIdentityService{c: c}
+	c.DsarSettings = &DsarSettingsService{c: c}
+	c.Integrations = &IntegrationsService{c: c}
 	c.Org = &OrgService{c: c}
 	c.Assets = &AssetsService{c: c}
+	c.Metadata = &MetadataService{c: c}
+	c.PartnerLinks = &PartnerLinksService{c: c}
 	return c
 }
 
@@ -265,6 +293,13 @@ func (c *Client) Usage(ctx context.Context) (*Usage, error) {
 	return &out, nil
 }
 
+// Entitlements returns what the org may use, from its plan, in the suite-standard shape —
+// GET /v1/entitlements: every feature ({key, enabled}) and every limit (limits.<name> with
+// limit, null = unlimited, and used where metered). Any key may read it.
+func (c *Client) Entitlements(ctx context.Context) (Object, error) {
+	return c.object(ctx, "GET", "/v1/entitlements", nil, nil)
+}
+
 // Audit returns the org's audit log, newest first — GET /v1/audit. Sign-ins aside, every
 // administrative change made in the dashboard or through the API, with who made it; API
 // actions are attributed to "apikey:<prefix>". limit <= 0 uses the server default (200).
@@ -274,6 +309,35 @@ func (c *Client) Usage(ctx context.Context) (*Usage, error) {
 // top-level audit().
 func (c *Client) Audit(ctx context.Context, limit int) (Object, error) {
 	return c.object(ctx, "GET", "/v1/audit", limitQuery(limit), nil)
+}
+
+// AuditByActor returns the audit rows of one actor — GET /v1/audit?actor=. "self" is the
+// calling key's own rows, the one form a scoped or property-locked key may read.
+func (c *Client) AuditByActor(ctx context.Context, actor string, limit int) (Object, error) {
+	q := limitQuery(limit)
+	if q == nil {
+		q = url.Values{}
+	}
+	q.Set("actor", actor)
+	return c.object(ctx, "GET", "/v1/audit", q, nil)
+}
+
+// GetAuditSink returns where the audit log is streamed as CloudEvents (never the secret) —
+// GET /v1/audit/sink.
+func (c *Client) GetAuditSink(ctx context.Context) (Object, error) {
+	return c.object(ctx, "GET", "/v1/audit/sink", nil, nil)
+}
+
+// SetAuditSink streams the audit log to an HTTPS endpoint as CloudEvents 1.0 —
+// PUT /v1/audit/sink {type: "webhook", url, secret?}. A generated secret is returned once.
+func (c *Client) SetAuditSink(ctx context.Context, input map[string]any) (Object, error) {
+	return c.object(ctx, "PUT", "/v1/audit/sink", nil, input)
+}
+
+// RemoveAuditSink stops the audit-log export — DELETE /v1/audit/sink.
+func (c *Client) RemoveAuditSink(ctx context.Context) error {
+	_, err := c.object(ctx, "DELETE", "/v1/audit/sink", nil, nil)
+	return err
 }
 
 // ---- internal request plumbing ----------------------------------------------
@@ -302,6 +366,11 @@ func (c *Client) delete(ctx context.Context, path string) error {
 // JSON-encoded. When out is non-nil the (2xx) response body is decoded into it;
 // out may be a *string to receive the raw body verbatim (e.g. CSV export).
 func (c *Client) do(ctx context.Context, method, path string, query url.Values, body, out any) error {
+	return c.doWithHeaders(ctx, method, path, query, body, out, nil)
+}
+
+// doWithHeaders is do with extra request headers, e.g. Idempotency-Key.
+func (c *Client) doWithHeaders(ctx context.Context, method, path string, query url.Values, body, out any, headers map[string]string) error {
 	var reader io.Reader
 	if body != nil {
 		buf, err := json.Marshal(body)
@@ -334,8 +403,17 @@ func (c *Client) do(ctx context.Context, method, path string, query url.Values, 
 	if c.strict && method != http.MethodGet {
 		req.Header.Set("Prefer", "strict-unknown-fields")
 	}
+	if c.secretRecipient != "" && method != http.MethodGet {
+		req.Header.Set("X-Secret-Recipient", c.secretRecipient)
+	}
+	for k, v := range c.headers {
+		req.Header.Set(k, v)
+	}
 	if c.userAgent != "" {
 		req.Header.Set("User-Agent", c.userAgent)
+	}
+	for k, v := range headers {
+		req.Header.Set(k, v)
 	}
 
 	resp, err := c.httpClient.Do(req)

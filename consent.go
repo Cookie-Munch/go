@@ -44,6 +44,12 @@ func (s *ConsentService) Stats(ctx context.Context, cbid string, query *RangeQue
 	return out, nil
 }
 
+// Insights returns opt-in by region and A/B variant and the decision rate —
+// GET /v1/sites/{cbid}/consent/insights. Language and time-to-decision are not recorded (null).
+func (s *ConsentService) Insights(ctx context.Context, cbid string, query *RangeQuery) (Object, error) {
+	return s.c.object(ctx, "GET", sitePath(cbid, "/consent/insights"), rangeValues(query), nil)
+}
+
 // Log returns recent anonymised consent records —
 // GET /v1/sites/{cbid}/consent/log.
 func (s *ConsentService) Log(ctx context.Context, cbid string, query *LogQuery) ([]ConsentLogRow, error) {
@@ -95,4 +101,11 @@ func (s *ConsentService) ExportSubject(ctx context.Context, cbid, stamp string) 
 		return nil, err
 	}
 	return &out, nil
+}
+
+// CategoryRegistry returns the reserved categories (support_chat, referrals) a site switches on
+// with categories.suite: stance, fallback, basis, wording in every banner language, known
+// vendors. Public — GET /v1/categories/registry.
+func (s *ConsentService) CategoryRegistry(ctx context.Context) (Object, error) {
+	return s.c.object(ctx, "GET", "/v1/categories/registry", nil, nil)
 }

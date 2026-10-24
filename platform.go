@@ -449,6 +449,12 @@ func (s *FulfillmentService) Executors(ctx context.Context) ([]Object, error) {
 	return out, nil
 }
 
+// Executor returns one connection with its full profile, never its credentials — GET
+// /v1/dsar/executors/{id}. Read it before changing the profile: UpdateExecutor replaces the whole profile.
+func (s *FulfillmentService) Executor(ctx context.Context, id string) (Object, error) {
+	return s.c.object(ctx, "GET", "/v1/dsar/executors/"+esc(id), nil, nil)
+}
+
 // ExecutorInput connects a system that runs part of a rights request. Profile describes
 // that system's API — paths, the words it uses for export and erase, its status vocabulary,
 // how it signs webhooks — so connecting a new platform needs no code. SecretKey is stored
@@ -494,6 +500,12 @@ type ExecutorPresetInput struct {
 	WebhookSecret string `json:"webhookSecret,omitempty"`
 	Auto          *bool  `json:"auto,omitempty"`
 	Cbid          string `json:"cbid,omitempty"`
+	// RevokeAtlasIDGrant (atlas) adds the optional step revoking the person's app grant on erasure.
+	RevokeAtlasIDGrant *bool `json:"revokeAtlasIdGrant,omitempty"`
+	// Label is your name for the credential, shown beside keyPrefix.
+	Label string `json:"label,omitempty"`
+	// Orchestrator is 2 (the default) or 1, the v1 adapter.
+	Orchestrator int `json:"orchestrator,omitempty"`
 }
 
 // ConnectExecutorPreset registers a system from a preset — POST /v1/dsar/executors {preset}.
@@ -520,6 +532,11 @@ type ExecutorPresetUpgrade struct {
 	PresetVersion int    `json:"presetVersion,omitempty"`
 	OrgID         string `json:"orgId,omitempty"`
 	AtlasIDAppID  string `json:"atlasIdAppId,omitempty"`
+	// RevokeAtlasIDGrant (atlas) adds the optional grant step.
+	RevokeAtlasIDGrant *bool `json:"revokeAtlasIdGrant,omitempty"`
+	// AcceptPreset names overridden paths (profileOverrides) that take the preset's value again;
+	// every other override is kept and listed in the diff as kept or conflict.
+	AcceptPreset []string `json:"acceptPreset,omitempty"`
 }
 
 // UpgradeExecutorPreset rebuilds a connection from its preset's latest version, keeping its
@@ -542,7 +559,19 @@ type ExecutorUpdate struct {
 	SecretKey     *string
 	WebhookSecret **string
 	Auto          *bool
+	// Label is your name for the credential; ClearExecutorLabel removes it.
+	Label **string
+	// PresetPinned true stops UpgradeExecutorPreset changing a preset-built connection.
+	PresetPinned *bool
+	// Orchestrator opts the connection in to (2) or out of (1) orchestrator v2.
+	Orchestrator *int
 }
+
+// ClearExecutorLabel removes a connection's credential label.
+func ClearExecutorLabel() **string { var none *string; return &none }
+
+// ExecutorLabel sets a connection's credential label.
+func ExecutorLabel(label string) **string { v := &label; return &v }
 
 // ClearExecutorWebhookSecret removes a connection's webhook secret.
 func ClearExecutorWebhookSecret() **string { var none *string; return &none }
@@ -587,6 +616,22 @@ func (s *FulfillmentService) ExecutorWebhookDeliveries(ctx context.Context, id s
 	return out, nil
 }
 
+// RecheckExecutor re-checks a connection now: a canary test that records its health, for a
+// deploy pipeline — POST /v1/dsar/executors/{id}/recheck.
+func (s *FulfillmentService) RecheckExecutor(ctx context.Context, id string) (Object, error) {
+	return s.c.object(ctx, "POST", "/v1/dsar/executors/"+esc(id)+"/recheck", nil, map[string]any{})
+}
+
+// ExecutorHealthHistory lists a connection's last health checks, newest first (limit 1 to 50;
+// 0 for the default) — GET /v1/dsar/executors/{id}/health/history.
+func (s *FulfillmentService) ExecutorHealthHistory(ctx context.Context, id string, limit int) ([]Object, error) {
+	var out []Object
+	if err := s.c.get(ctx, "/v1/dsar/executors/"+esc(id)+"/health/history", limitQuery(limit), &out); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func executorPatchBody(patch ExecutorUpdate) map[string]any {
 	body := map[string]any{}
 	if patch.Profile != nil {
@@ -608,6 +653,19 @@ func executorPatchBody(patch ExecutorUpdate) map[string]any {
 	if patch.Auto != nil {
 		body["auto"] = *patch.Auto
 	}
+	if patch.Label != nil {
+		if *patch.Label == nil {
+			body["label"] = nil
+		} else {
+			body["label"] = **patch.Label
+		}
+	}
+	if patch.PresetPinned != nil {
+		body["presetPinned"] = *patch.PresetPinned
+	}
+	if patch.Orchestrator != nil {
+		body["orchestrator"] = *patch.Orchestrator
+	}
 	return body
 }
 
@@ -626,6 +684,18 @@ type ExecutorTest struct {
 // the raw (redacted) upstream answers and a one-line verdict.
 func (s *FulfillmentService) TestExecutor(ctx context.Context, id string, input ExecutorTest) (Object, error) {
 	return s.c.object(ctx, "POST", "/v1/dsar/executors/"+esc(id)+"/test", nil, input)
+}
+
+// ExecutorConformance runs the cm-standard-v2 conformance kit against a connection, on the
+// canary subject only — POST /v1/dsar/executors/{id}/test {"conformance": true}.
+func (s *FulfillmentService) ExecutorConformance(ctx context.Context, id string) (Object, error) {
+	return s.c.object(ctx, "POST", "/v1/dsar/executors/"+esc(id)+"/test", nil, map[string]any{"conformance": true})
+}
+
+// RollExecutorCompletionSecret mints a new completion secret, shown once; the old one keeps
+// verifying for 24 hours — POST /v1/dsar/executors/{id}/completion-secret/roll.
+func (s *FulfillmentService) RollExecutorCompletionSecret(ctx context.Context, id string) (Object, error) {
+	return s.c.object(ctx, "POST", "/v1/dsar/executors/"+esc(id)+"/completion-secret/roll", nil, nil)
 }
 
 // Task returns one fulfilment task: its status history (events), every request made to a
@@ -1278,7 +1348,7 @@ type DeclaredCookieInput struct {
 }
 
 // CookiePresetParams are a vendor preset's parameters: Atlas FrontendAPIHost and
-// CrossSubdomainCookies; Chatly PublicID, Dragging and Category; Referally CookieDomain, CookieDays and Category.
+// CrossSubdomainCookies; Chatly PublicID, Dragging and Category; referral presets CookieDomain, CookieDays and Category (referalli LegacyName, impact CampaignID).
 type CookiePresetParams struct {
 	FrontendAPIHost       string `json:"frontendApiHost,omitempty"`
 	CrossSubdomainCookies *bool  `json:"crossSubdomainCookies,omitempty"`
@@ -1287,6 +1357,8 @@ type CookiePresetParams struct {
 	Category              string `json:"category,omitempty"`
 	CookieDomain          string `json:"cookieDomain,omitempty"`
 	CookieDays            int    `json:"cookieDays,omitempty"`
+	LegacyName            *bool  `json:"legacyName,omitempty"`
+	CampaignID            string `json:"campaignId,omitempty"`
 }
 
 // PurgeObservedInput is the window of a purge: Since (and optionally Until), ISO-8601.
@@ -1295,7 +1367,7 @@ type PurgeObservedInput struct {
 	Until string `json:"until,omitempty"`
 }
 
-// CookiePresets lists every declaration preset (atlas, forumulate, chatly, cookiemunch, referally) —
+// CookiePresets lists every declaration preset (atlas, forumulate, chatly, cookiemunch, referalli, firstpromoter, partnerstack, tapfiliate, impact) —
 // GET /v1/sites/{cbid}/cookies/presets: parameters, what each declared here, and whether
 // the vendor's manifest exists yet.
 func (s *SitesService) CookiePresets(ctx context.Context, cbid string) (Object, error) {
@@ -1312,6 +1384,41 @@ func (s *SitesService) ApplyCookiePreset(ctx context.Context, cbid, vendor strin
 // ApplyCookiePresetDryRun is ApplyCookiePreset with ?dryRun=1; nothing is stored.
 func (s *SitesService) ApplyCookiePresetDryRun(ctx context.Context, cbid, vendor string, in CookiePresetParams) (Object, error) {
 	return s.c.object(ctx, "PUT", sitePath(cbid, "/cookies/presets/"+esc(vendor)), dryRun, in)
+}
+
+// ImportCookieManifest declares any vendor's cookies and storage from its embed manifest — PUT
+// /v1/sites/{cbid}/cookies/presets/custom with {"url": …} or {"manifest": …} (and "params"). The
+// vendor id is the manifest's "product".
+func (s *SitesService) ImportCookieManifest(ctx context.Context, cbid string, in Object) (Object, error) {
+	return s.c.object(ctx, "PUT", sitePath(cbid, "/cookies/presets/custom"), nil, in)
+}
+
+// ImportCookieManifestDryRun is ImportCookieManifest with ?dryRun=1; nothing is stored.
+func (s *SitesService) ImportCookieManifestDryRun(ctx context.Context, cbid string, in Object) (Object, error) {
+	return s.c.object(ctx, "PUT", sitePath(cbid, "/cookies/presets/custom"), dryRun, in)
+}
+
+// CookieSuggestions returns what to declare — GET /v1/sites/{cbid}/cookies/suggestions: detected
+// vendors and one suggestion per undeclared cookie or key.
+func (s *SitesService) CookieSuggestions(ctx context.Context, cbid string) (Object, error) {
+	return s.c.object(ctx, "GET", sitePath(cbid, "/cookies/suggestions"), nil, nil)
+}
+
+// DeclareCookieSuggestions declares the suggestions — POST
+// /v1/sites/{cbid}/cookies/suggestions/declare ({"names": […], "presets": bool}, both optional).
+func (s *SitesService) DeclareCookieSuggestions(ctx context.Context, cbid string, in Object) (Object, error) {
+	if in == nil {
+		in = Object{}
+	}
+	return s.c.object(ctx, "POST", sitePath(cbid, "/cookies/suggestions/declare"), nil, in)
+}
+
+// DeclareCookieSuggestionsDryRun is DeclareCookieSuggestions with ?dryRun=1; nothing is stored.
+func (s *SitesService) DeclareCookieSuggestionsDryRun(ctx context.Context, cbid string, in Object) (Object, error) {
+	if in == nil {
+		in = Object{}
+	}
+	return s.c.object(ctx, "POST", sitePath(cbid, "/cookies/suggestions/declare"), dryRun, in)
 }
 
 // RemoveCookiePreset removes every declaration a vendor preset made — DELETE
@@ -1521,6 +1628,17 @@ func (s *WebhooksService) ReplayDeadLetter(ctx context.Context, id string) (Obje
 	return s.c.object(ctx, "POST", "/v1/webhooks/dead-letters/"+esc(id)+"/replay", nil, nil)
 }
 
+// Replay sends what a failing or disabled endpoint missed since `since` (epoch ms or ISO
+// date), oldest first, one attempt each, stopping at the first failure —
+// POST /v1/webhooks/{id}/replay. limit 0 uses the server default (100).
+func (s *WebhooksService) Replay(ctx context.Context, id, since string, limit int) (Object, error) {
+	q := url.Values{"since": {since}}
+	if limit > 0 {
+		q.Set("limit", strconv.Itoa(limit))
+	}
+	return s.c.object(ctx, "POST", "/v1/webhooks/"+esc(id)+"/replay", q, nil)
+}
+
 // Erase erases a subject's consent records on one site, for a deletion request past
 // identity verification — POST /v1/dsar/{id}/erase. Irreversible, and noted on the
 // request. Needs dsar:write and consent:write. When the response carries a "warning",
@@ -1542,4 +1660,116 @@ func (s *DSARService) Export(ctx context.Context, id, cbid, stamp string) (Objec
 // subject with none saved has empty purposes. Needs consent:read.
 func (s *PreferencesService) Get(ctx context.Context, subjectID string) (Object, error) {
 	return s.c.object(ctx, "GET", "/v1/preferences/"+esc(subjectID), nil, nil)
+}
+
+// ---- orchestrator v2: cases, grace setting, subject card --------------------
+
+// SubjectIdentity is a signed-in identity from any issuer the site trusts; (Iss, Sub) is the key.
+type SubjectIdentity struct {
+	Iss       string `json:"iss"`
+	Sub       string `json:"sub"`
+	Ext       string `json:"ext,omitempty"`
+	Principal string `json:"principal,omitempty"`
+}
+
+// CaseSubject is who a case is about.
+type CaseSubject struct {
+	Emails   []string         `json:"emails"`
+	Identity *SubjectIdentity `json:"identity,omitempty"`
+}
+
+// CaseInput opens a case — POST /v1/dsar/requests. Type takes the canonical words (access,
+// deletion, closure, restriction, rectification) or an alias (erasure, erase, export). Source
+// "product" or "atlas" attests the person (needs dsar:write); "admin" files it received.
+type CaseInput struct {
+	Cbid         string       `json:"cbid"`
+	Type         string       `json:"type"`
+	Subject      *CaseSubject `json:"subject,omitempty"`
+	SubjectToken string       `json:"subjectToken,omitempty"`
+	Source       string       `json:"source,omitempty"`
+	Reason       string       `json:"reason,omitempty"`
+	SkipSystems  []string     `json:"skipSystems,omitempty"`
+	Fulfill      *bool        `json:"fulfill,omitempty"`
+	Test         bool         `json:"test,omitempty"`
+}
+
+// CaseOptions carries the headers of a case intake: an Idempotency-Key (16–128 characters) so a
+// retry answers the same case, and an X-ForgeDeck-Trace to keep.
+type CaseOptions struct {
+	IdempotencyKey string
+	Trace          string
+}
+
+// OpenCase opens a case fanned out to every connected system — POST /v1/dsar/requests.
+func (s *DSARService) OpenCase(ctx context.Context, in CaseInput, opts CaseOptions) (Object, error) {
+	headers := map[string]string{}
+	if opts.IdempotencyKey != "" {
+		headers["Idempotency-Key"] = opts.IdempotencyKey
+	}
+	if opts.Trace != "" {
+		headers["X-ForgeDeck-Trace"] = opts.Trace
+	}
+	var out Object
+	if err := s.c.doWithHeaders(ctx, "POST", "/v1/dsar/requests", nil, in, &out, headers); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// GetCase returns one case across every system — GET /v1/dsar/requests/{id}.
+func (s *DSARService) GetCase(ctx context.Context, id string) (Object, error) {
+	return s.c.object(ctx, "GET", "/v1/dsar/requests/"+esc(id), nil, nil)
+}
+
+// CancelCase cancels a case before executeAfter — POST /v1/dsar/requests/{id}/cancel. Every
+// system keeps its data.
+func (s *DSARService) CancelCase(ctx context.Context, id string) (Object, error) {
+	return s.c.object(ctx, "POST", "/v1/dsar/requests/"+esc(id)+"/cancel", nil, nil)
+}
+
+// CaseReceipt returns the signed (Ed25519) receipt for a case — GET /v1/dsar/requests/{id}/receipt.
+func (s *DSARService) CaseReceipt(ctx context.Context, id string) (Object, error) {
+	return s.c.object(ctx, "GET", "/v1/dsar/requests/"+esc(id)+"/receipt", nil, nil)
+}
+
+// ListByTrace returns the request carrying one X-ForgeDeck-Trace — GET /v1/dsar?trace=.
+func (s *DSARService) ListByTrace(ctx context.Context, trace string) ([]Object, error) {
+	var out []Object
+	if err := s.c.get(ctx, "/v1/dsar", url.Values{"trace": {trace}}, &out); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// DsarSettingsService is a site's rights-request settings: GraceDays (0–30; 7 for a new site, 0 until set for an existing one), how long an
+// erasure or account closure waits before any system acts. Needs dsar:read / dsar:write.
+type DsarSettingsService struct{ c *Client }
+
+// Get — GET /v1/sites/{cbid}/dsar-settings.
+func (s *DsarSettingsService) Get(ctx context.Context, cbid string) (Object, error) {
+	return s.c.object(ctx, "GET", sitePath(cbid, "/dsar-settings"), nil, nil)
+}
+
+// Set — PUT /v1/sites/{cbid}/dsar-settings. Applies to cases opened afterwards.
+func (s *DsarSettingsService) Set(ctx context.Context, cbid string, graceDays int) (Object, error) {
+	return s.c.object(ctx, "PUT", sitePath(cbid, "/dsar-settings"), nil, map[string]any{"graceDays": graceDays})
+}
+
+// IntegrationsService is the cards for support, CRM and helpdesk sidebars. Needs dsar:read.
+type IntegrationsService struct{ c *Client }
+
+// SubjectCard lists a person's open rights requests — GET /v1/integrations/{app}/card — by iss and
+// sub (preferred) or email. Never matched across identities on a shared email.
+func (s *IntegrationsService) SubjectCard(ctx context.Context, app, iss, sub, email string) (Object, error) {
+	q := url.Values{}
+	if iss != "" {
+		q.Set("iss", iss)
+	}
+	if sub != "" {
+		q.Set("sub", sub)
+	}
+	if email != "" {
+		q.Set("email", email)
+	}
+	return s.c.object(ctx, "GET", "/v1/integrations/"+esc(app)+"/card", q, nil)
 }
