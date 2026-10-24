@@ -66,6 +66,7 @@ type Client struct {
 	Preferences *PreferencesService
 	Members     *MembersService
 	Keys        *KeysService
+	Sandbox     *SandboxService
 	Webhooks    *WebhooksService
 	Banners     *BannersService
 
@@ -169,6 +170,7 @@ func New(apiKey string, opts ...Option) *Client {
 	c.Preferences = &PreferencesService{c: c}
 	c.Members = &MembersService{c: c}
 	c.Keys = &KeysService{c: c}
+	c.Sandbox = &SandboxService{c: c}
 	c.Webhooks = &WebhooksService{c: c}
 	c.Banners = &BannersService{c: c}
 	c.Identity = &IdentityService{c: c}
@@ -298,6 +300,12 @@ func (c *Client) Usage(ctx context.Context) (*Usage, error) {
 // limit, null = unlimited, and used where metered). Any key may read it.
 func (c *Client) Entitlements(ctx context.Context) (Object, error) {
 	return c.object(ctx, "GET", "/v1/entitlements", nil, nil)
+}
+
+// Versions lists the dated API versions, what each changed, and the one this key is pinned to
+// (yours) — GET /v1/versions. Re-pin with Keys.UpdateSelf.
+func (c *Client) Versions(ctx context.Context) (Object, error) {
+	return c.object(ctx, "GET", "/v1/versions", nil, nil)
 }
 
 // Audit returns the org's audit log, newest first — GET /v1/audit. Sign-ins aside, every

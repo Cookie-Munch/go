@@ -3,6 +3,7 @@ package cookiemunch
 import (
 	"context"
 	"net/url"
+	"strings"
 )
 
 // metaQuery is ?metadata[k]=v tag filters for list endpoints.
@@ -29,6 +30,12 @@ func (s *KeysService) Self(ctx context.Context) (Object, error) {
 	return s.c.object(ctx, "GET", "/v1/keys/self", nil, nil)
 }
 
+// UpdateSelf re-pins the calling key to another dated API version (any key, for itself) —
+// PATCH /v1/keys/self.
+func (s *KeysService) UpdateSelf(ctx context.Context, apiVersion string) (Object, error) {
+	return s.c.object(ctx, "PATCH", "/v1/keys/self", nil, map[string]any{"apiVersion": apiVersion})
+}
+
 // RollSelf rotates the calling key — POST /v1/keys/self/roll. The old secret stops at once; make the
 // client WithHeader("Idempotency-Key", …) so a lost answer replays.
 func (s *KeysService) RollSelf(ctx context.Context) (Object, error) {
@@ -47,6 +54,36 @@ type VendInput struct {
 // POST /v1/keys/vend. Needs keys:write or a full-access key.
 func (s *KeysService) Vend(ctx context.Context, in VendInput) (Object, error) {
 	return s.c.object(ctx, "POST", "/v1/keys/vend", nil, in)
+}
+
+// OperatorTokenExchange swaps an identity provider's token for a short-lived, scoped key (RFC 8693).
+type OperatorTokenExchange struct {
+	SubjectToken string
+	// SubjectTokenType is access_token (default), jwt or id_token.
+	SubjectTokenType string
+	Scope            []string
+	// Resource is "org:<id>" or "site:<cbid>".
+	Resource string
+	// ExpiresIn is seconds, 60 to 3600; 0 means the default (3600).
+	ExpiresIn int
+}
+
+// ExchangeOperatorToken posts POST /v1/oauth/token. It needs no API key: the route never reads one,
+// so a client made with any placeholder key works. The key it returns lives at most an hour.
+func (s *KeysService) ExchangeOperatorToken(ctx context.Context, in OperatorTokenExchange) (Object, error) {
+	tt := in.SubjectTokenType
+	if tt == "" {
+		tt = "access_token"
+	}
+	body := map[string]any{
+		"grant_type": "urn:ietf:params:oauth:grant-type:token-exchange", "subject_token": in.SubjectToken,
+		"subject_token_type": "urn:ietf:params:oauth:token-type:" + tt, "scope": strings.Join(in.Scope, " "),
+		"resource": in.Resource, "audience": "cookiemunch",
+	}
+	if in.ExpiresIn > 0 {
+		body["expires_in"] = in.ExpiresIn
+	}
+	return s.c.object(ctx, "POST", "/v1/oauth/token", nil, body)
 }
 
 // RevokeLeaked revokes a published secret — POST /v1/keys/revoke_leaked. It needs no valid key and
