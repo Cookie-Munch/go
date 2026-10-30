@@ -759,6 +759,20 @@ func (s *RegulatoryService) Upcoming(ctx context.Context, days int) (Object, err
 	return s.c.object(ctx, "GET", "/v1/regulatory/upcoming", q, nil)
 }
 
+// UpcomingForSite returns what takes effect within days (<= 0 uses the server default, 90) where at
+// least minShare (<= 0 uses the server default, 0.01) of the site's last 30 days of decisions came
+// from — GET /v1/sites/{cbid}/regulatory/upcoming. Needs sites:read.
+func (s *RegulatoryService) UpcomingForSite(ctx context.Context, cbid string, days int, minShare float64) (Object, error) {
+	q := url.Values{}
+	if days > 0 {
+		q.Set("days", strconv.Itoa(days))
+	}
+	if minShare > 0 {
+		q.Set("minShare", strconv.FormatFloat(minShare, 'f', -1, 64))
+	}
+	return s.c.object(ctx, "GET", sitePath(cbid, "/regulatory/upcoming"), q, nil)
+}
+
 // ---- reseller ---------------------------------------------------------------
 
 // ResellerService groups the /v1/reseller endpoints: provision and manage child orgs.
