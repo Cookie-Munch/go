@@ -490,8 +490,14 @@ func (s *FulfillmentService) DryRunConnectExecutor(ctx context.Context, input Ex
 // and System) or "chatly". A preset waiting on another platform's API is refused with 409
 // preset_waiting_on_platform; see ExecutorPresets.
 type ExecutorPresetInput struct {
-	Preset        string `json:"preset"`
-	SecretKey     string `json:"secretKey"`
+	Preset string `json:"preset"`
+	// SecretKey is the connection's key. Send it or MintFrom.
+	SecretKey string `json:"secretKey,omitempty"`
+	// MintFrom is a partner id (one that registered an executorKeyUrl) that mints the key for the
+	// site under its partner link, in place of SecretKey. The connection is scoped to that site.
+	MintFrom string `json:"mintFrom,omitempty"`
+	// ExternalID (with MintFrom) is the partner account; default the one the site's live link names.
+	ExternalID    string `json:"externalId,omitempty"`
 	PresetVersion int    `json:"presetVersion,omitempty"`
 	System        string `json:"system,omitempty"`
 	BaseURL       string `json:"baseUrl,omitempty"`
@@ -1330,7 +1336,7 @@ func (s *SitesService) ApplyImport(ctx context.Context, cbid, data string, overw
 }
 
 // DeclaredCookieInput is what the site owner says a cookie is. Category is a standard
-// category or one of the site's categories.custom ids (not "unclassified").
+// category or one of the site's categories.suite or categories.custom ids (not "unclassified").
 type DeclaredCookieInput struct {
 	Category string `json:"category"`
 	Purpose  string `json:"purpose"`
@@ -1694,7 +1700,7 @@ type CaseInput struct {
 }
 
 // CaseOptions carries the headers of a case intake: an Idempotency-Key (16–128 characters) so a
-// retry answers the same case, and an X-ForgeDeck-Trace to keep.
+// retry answers the same case, and an X-Trace-Id to keep.
 type CaseOptions struct {
 	IdempotencyKey string
 	Trace          string
@@ -1707,7 +1713,7 @@ func (s *DSARService) OpenCase(ctx context.Context, in CaseInput, opts CaseOptio
 		headers["Idempotency-Key"] = opts.IdempotencyKey
 	}
 	if opts.Trace != "" {
-		headers["X-ForgeDeck-Trace"] = opts.Trace
+		headers["X-Trace-Id"] = opts.Trace
 	}
 	var out Object
 	if err := s.c.doWithHeaders(ctx, "POST", "/v1/dsar/requests", nil, in, &out, headers); err != nil {
@@ -1732,7 +1738,7 @@ func (s *DSARService) CaseReceipt(ctx context.Context, id string) (Object, error
 	return s.c.object(ctx, "GET", "/v1/dsar/requests/"+esc(id)+"/receipt", nil, nil)
 }
 
-// ListByTrace returns the request carrying one X-ForgeDeck-Trace — GET /v1/dsar?trace=.
+// ListByTrace returns the request carrying one X-Trace-Id — GET /v1/dsar?trace=.
 func (s *DSARService) ListByTrace(ctx context.Context, trace string) ([]Object, error) {
 	var out []Object
 	if err := s.c.get(ctx, "/v1/dsar", url.Values{"trace": {trace}}, &out); err != nil {
@@ -1755,7 +1761,8 @@ func (s *DsarSettingsService) Set(ctx context.Context, cbid string, graceDays in
 	return s.c.object(ctx, "PUT", sitePath(cbid, "/dsar-settings"), nil, map[string]any{"graceDays": graceDays})
 }
 
-// IntegrationsService is the cards for support, CRM and helpdesk sidebars. Needs dsar:read.
+// IntegrationsService is the cards for support, CRM and helpdesk sidebars (dsar:read), and
+// identity-provider connect (dsar:write).
 type IntegrationsService struct{ c *Client }
 
 // SubjectCard lists a person's open rights requests — GET /v1/integrations/{app}/card — by iss and
@@ -1772,4 +1779,21 @@ func (s *IntegrationsService) SubjectCard(ctx context.Context, app, iss, sub, em
 		q.Set("email", email)
 	}
 	return s.c.object(ctx, "GET", "/v1/integrations/"+esc(app)+"/card", q, nil)
+}
+
+// Connect connects an identity provider's privacy orchestrator — POST /v1/integrations/{provider}/connect:
+// it mints a dsar:write key locked to cbid and hands it to the provider, authorised with providerKey.
+// The minted key is never returned, only its prefix. connector ({url, method, body}) is only for a
+// provider with no built-in connector (nil otherwise). Needs dsar:write (no keys:write); dryRun mints
+// and sends nothing.
+func (s *IntegrationsService) Connect(ctx context.Context, provider, cbid, providerKey string, connector Object, dryRun bool) (Object, error) {
+	var q url.Values
+	if dryRun {
+		q = dryRunQuery()
+	}
+	body := map[string]any{"cbid": cbid, "providerKey": providerKey}
+	if connector != nil {
+		body["connector"] = connector
+	}
+	return s.c.object(ctx, "POST", "/v1/integrations/"+esc(provider)+"/connect", q, body)
 }

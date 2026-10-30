@@ -139,12 +139,12 @@ func (c *Client) ListOrgsTagged(ctx context.Context, metadata map[string]string)
 }
 
 // DeleteSandboxOrg removes a SANDBOX organisation of this account — DELETE /v1/orgs/{id}?hard=1.
-// Anything not created with metadata.forgedeck_sandbox is 403 not_a_sandbox.
+// Anything not created with metadata.stack_sandbox is 403 not_a_sandbox.
 func (c *Client) DeleteSandboxOrg(ctx context.Context, id string) (Object, error) {
 	return c.object(ctx, "DELETE", "/v1/orgs/"+esc(id), url.Values{"hard": {"1"}}, nil)
 }
 
-// ProvisionEnv is what forgedeck env writes for the product provisioned with this forgedeck ref —
+// ProvisionEnv is what env writes for the product provisioned with this stack ref —
 // GET /v1/provision/env: names, non-secret values, and references for secrets.
 func (c *Client) ProvisionEnv(ctx context.Context, ref string) (Object, error) {
 	return c.object(ctx, "GET", "/v1/provision/env", url.Values{"ref": {ref}}, nil)
@@ -189,7 +189,7 @@ func (s *MetadataService) Get(ctx context.Context, typ, id string) (Object, erro
 	return s.c.object(ctx, "GET", "/v1/metadata/"+esc(typ)+"/"+esc(id), nil, nil)
 }
 
-// Update merges tags (a nil value removes one) — PATCH /v1/metadata/{type}/{id}. forgedeck_sandbox
+// Update merges tags (a nil value removes one) — PATCH /v1/metadata/{type}/{id}. stack_sandbox
 // cannot be set here. dryRun answers with the diff.
 func (s *MetadataService) Update(ctx context.Context, typ, id string, metadata map[string]any, dryRun bool) (Object, error) {
 	var q url.Values

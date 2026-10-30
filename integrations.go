@@ -117,7 +117,7 @@ func (c *Client) RemoveHealthWaiver(ctx context.Context, check, cbid, subject st
 }
 
 // EmbedManifest returns the site's embed manifest — GET /v1/embed?cbid=, the tenant variant of
-// /.well-known/forgedeck-embed.json: every origin by CSP directive and every browser key the embed
+// /.well-known/cookiemunch-embed.json: every origin by CSP directive and every browser key the embed
 // writes for this site's config. Public: no key is needed.
 func (c *Client) EmbedManifest(ctx context.Context, cbid string) (Object, error) {
 	return c.object(ctx, "GET", "/v1/embed", url.Values{"cbid": {cbid}}, nil)
