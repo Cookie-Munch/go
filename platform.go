@@ -1367,18 +1367,24 @@ type DeclaredCookieInput struct {
 	Type string `json:"type,omitempty"`
 }
 
-// CookiePresetParams are a vendor preset's parameters: Atlas FrontendAPIHost and
-// CrossSubdomainCookies; Chatly PublicID, Dragging and Category; referral presets CookieDomain, CookieDays and Category (referalli LegacyName, impact CampaignID).
+// CookiePresetParams are a vendor preset's parameters: Atlas FrontendAPIHost,
+// CrossSubdomainCookies and PublishableKey; Chatly PublicID, Dragging, Storage, Tracking and Category; referral presets CookieDomain, CookieDays and Category (referalli LegacyName, impact CampaignID).
 type CookiePresetParams struct {
 	FrontendAPIHost       string `json:"frontendApiHost,omitempty"`
 	CrossSubdomainCookies *bool  `json:"crossSubdomainCookies,omitempty"`
+	PublishableKey        string `json:"publishableKey,omitempty"`
 	PublicID              string `json:"publicId,omitempty"`
 	Dragging              bool   `json:"dragging,omitempty"`
-	Category              string `json:"category,omitempty"`
-	CookieDomain          string `json:"cookieDomain,omitempty"`
-	CookieDays            int    `json:"cookieDays,omitempty"`
-	LegacyName            *bool  `json:"legacyName,omitempty"`
-	CampaignID            string `json:"campaignId,omitempty"`
+	// Storage is the Chatly widget's own storage option: "allow", "deny", "on-open", or a
+	// map of functional/analytics/marketing to one of those.
+	Storage any `json:"storage,omitempty"`
+	// Tracking is the Chatly widget's own tracking option: false, or a map such as {"visits": false}.
+	Tracking     any    `json:"tracking,omitempty"`
+	Category     string `json:"category,omitempty"`
+	CookieDomain string `json:"cookieDomain,omitempty"`
+	CookieDays   int    `json:"cookieDays,omitempty"`
+	LegacyName   *bool  `json:"legacyName,omitempty"`
+	CampaignID   string `json:"campaignId,omitempty"`
 }
 
 // PurgeObservedInput is the window of a purge: Since (and optionally Until), ISO-8601.
