@@ -467,13 +467,27 @@ type ExecutorInput struct {
 	Profile       Object `json:"profile"`
 	WebhookSecret string `json:"webhookSecret,omitempty"`
 	Auto          *bool  `json:"auto,omitempty"`
+	// RequireApproval parks its erasures (status awaiting_approval) until ApproveTask.
+	RequireApproval *bool `json:"requireApproval,omitempty"`
+	// Verify ("1" or "warn") probes the connection before storing it: a canary locate, never an
+	// erasure. "1" refuses a failing one (422 verify_failed, nothing stored); "warn" stores it with
+	// the verdict in warnings. Sent as ?verify=, not in the body.
+	Verify string `json:"-"`
+}
+
+// verifyQuery is ?verify= when asked for, else nil.
+func verifyQuery(verify string) url.Values {
+	if verify == "" {
+		return nil
+	}
+	return url.Values{"verify": {verify}}
 }
 
 // ConnectExecutor registers a system. The response carries the webhook URL to configure in it.
 // A WebhookSecret of the form whsec_<base64> verifies deliveries signed with its base64-decoded
 // bytes or with the literal string; any other secret only with its UTF-8 bytes.
 func (s *FulfillmentService) ConnectExecutor(ctx context.Context, input ExecutorInput) (Object, error) {
-	return s.c.object(ctx, "POST", "/v1/dsar/executors", nil, input)
+	return s.c.object(ctx, "POST", "/v1/dsar/executors", verifyQuery(input.Verify), input)
 }
 
 // dryRunQuery is ?dryRun=1: validate in full, answer what would happen, store nothing.
@@ -512,12 +526,16 @@ type ExecutorPresetInput struct {
 	Label string `json:"label,omitempty"`
 	// Orchestrator is 2 (the default) or 1, the v1 adapter.
 	Orchestrator int `json:"orchestrator,omitempty"`
+	// RequireApproval parks its erasures (status awaiting_approval) until ApproveTask.
+	RequireApproval *bool `json:"requireApproval,omitempty"`
+	// Verify ("1" or "warn"): as on ExecutorInput, sent as ?verify=.
+	Verify string `json:"-"`
 }
 
 // ConnectExecutorPreset registers a system from a preset — POST /v1/dsar/executors {preset}.
 // The response carries presetVersion and presetDiff.
 func (s *FulfillmentService) ConnectExecutorPreset(ctx context.Context, input ExecutorPresetInput) (Object, error) {
-	return s.c.object(ctx, "POST", "/v1/dsar/executors", nil, input)
+	return s.c.object(ctx, "POST", "/v1/dsar/executors", verifyQuery(input.Verify), input)
 }
 
 // DryRunConnectExecutorPreset is ConnectExecutorPreset with ?dryRun=1: nothing is stored.
@@ -709,6 +727,22 @@ func (s *FulfillmentService) RollExecutorCompletionSecret(ctx context.Context, i
 // changed mid-request — GET /v1/dsar/{id}/tasks/{taskId}.
 func (s *FulfillmentService) Task(ctx context.Context, requestID, taskID string) (Object, error) {
 	return s.c.object(ctx, "GET", "/v1/dsar/"+esc(requestID)+"/tasks/"+esc(taskID), nil, nil)
+}
+
+// ApproveTask sends an erasure that was awaiting approval (a connection with RequireApproval).
+// Audited — POST /v1/dsar/{id}/tasks/{taskId}/approve.
+func (s *FulfillmentService) ApproveTask(ctx context.Context, requestID, taskID string) (Object, error) {
+	return s.c.object(ctx, "POST", "/v1/dsar/"+esc(requestID)+"/tasks/"+esc(taskID)+"/approve", nil, nil)
+}
+
+// RejectTask refuses it: nothing is sent, and the task fails with reason (empty for none).
+// Audited — POST /v1/dsar/{id}/tasks/{taskId}/reject.
+func (s *FulfillmentService) RejectTask(ctx context.Context, requestID, taskID, reason string) (Object, error) {
+	body := Object{}
+	if reason != "" {
+		body["reason"] = reason
+	}
+	return s.c.object(ctx, "POST", "/v1/dsar/"+esc(requestID)+"/tasks/"+esc(taskID)+"/reject", nil, body)
 }
 
 // DisconnectExecutor removes a connection; its open sub-tasks stop being driven.
@@ -1636,6 +1670,12 @@ func (s *WebhooksService) RollSecret(ctx context.Context, id string) (Object, er
 	return s.c.object(ctx, "POST", "/v1/webhooks/"+esc(id)+"/roll", nil, nil)
 }
 
+// RollSecretTo rotates a subscription's signing secret to one you chose (32-256 printable
+// characters). The answer is {"rolled": true}; the secret is not echoed.
+func (s *WebhooksService) RollSecretTo(ctx context.Context, id, secret string) (Object, error) {
+	return s.c.object(ctx, "POST", "/v1/webhooks/"+esc(id)+"/roll", nil, map[string]any{"secret": secret})
+}
+
 // Test sends a signed test event to a subscription now and reports what the endpoint
 // answered — POST /v1/webhooks/{id}/test.
 func (s *WebhooksService) Test(ctx context.Context, id string) (Object, error) {
@@ -1762,6 +1802,16 @@ func (s *DSARService) CaseReceipt(ctx context.Context, id string) (Object, error
 func (s *DSARService) ListByTrace(ctx context.Context, trace string) ([]Object, error) {
 	var out []Object
 	if err := s.c.get(ctx, "/v1/dsar", url.Values{"trace": {trace}}, &out); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// ListByOrigin returns the requests with one origin — GET /v1/dsar?origin=. "account_deletion":
+// those a person's own account deletion opened.
+func (s *DSARService) ListByOrigin(ctx context.Context, origin string) ([]Object, error) {
+	var out []Object
+	if err := s.c.get(ctx, "/v1/dsar", url.Values{"origin": {origin}}, &out); err != nil {
 		return nil, err
 	}
 	return out, nil

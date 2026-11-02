@@ -519,9 +519,10 @@ type WebhookSubscription struct {
 	ID        string   `json:"id"`
 	OrgID     string   `json:"orgId"`
 	URL       string   `json:"url"`
-	Secret    string   `json:"secret,omitempty"`
-	Events    []string `json:"events"`
-	CBID      *string  `json:"cbid"` // null = all properties in the org
+	Secret    string   `json:"secret,omitempty"`  // only when Cookie Munch generated it
+	Events    []string `json:"events"`            // the patterns as given: names, "*", "<family>.*"
+	Matches   []string `json:"matches,omitempty"` // the events those patterns take today
+	CBID      *string  `json:"cbid"`              // null = all properties in the org
 	Active    bool     `json:"active"`
 	CreatedAt int64    `json:"createdAt"`
 }
@@ -529,8 +530,10 @@ type WebhookSubscription struct {
 // WebhookCreate is the body of POST /v1/webhooks.
 type WebhookCreate struct {
 	URL    string   `json:"url"`
-	Events []string `json:"events"`
+	Events []string `json:"events"` // names, "*" or "<family>.*"
 	CBID   string   `json:"cbid,omitempty"`
+	// Secret is your own signing secret (32-256 printable characters). It is not echoed back.
+	Secret string `json:"secret,omitempty"`
 }
 
 // ---- banners ----------------------------------------------------------------

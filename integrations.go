@@ -12,6 +12,8 @@ type SiteUpdate struct {
 	Domain  *string
 	Name    **string
 	Aliases []string
+	// KeepOldDomain, with a new Domain, keeps the old domain as an alias while both run.
+	KeepOldDomain bool
 }
 
 // ClearSiteName removes a site's display name (the domain is shown again).
@@ -34,6 +36,9 @@ func siteUpdateBody(p SiteUpdate) map[string]any {
 	}
 	if p.Aliases != nil {
 		body["aliases"] = p.Aliases
+	}
+	if p.KeepOldDomain {
+		body["keepOldDomain"] = true
 	}
 	return body
 }
