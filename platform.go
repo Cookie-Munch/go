@@ -1488,6 +1488,16 @@ func (s *SitesService) DeclareCookieSuggestionsDryRun(ctx context.Context, cbid 
 	return s.c.object(ctx, "POST", sitePath(cbid, "/cookies/suggestions/declare"), dryRun, in)
 }
 
+// PlanCookies plans a provisioning run, storing nothing — POST /v1/sites/{cbid}/cookies/plan
+// ({"cookies": […], "replace": bool, "presets": {vendor: params}}, all optional): the declarations
+// PUT, then each preset in key order, against one scratch copy. Answers { dryRun, steps, declared, count, diff }.
+func (s *SitesService) PlanCookies(ctx context.Context, cbid string, in Object) (Object, error) {
+	if in == nil {
+		in = Object{}
+	}
+	return s.c.object(ctx, "POST", sitePath(cbid, "/cookies/plan"), nil, in)
+}
+
 // Translation returns the site's own translation account — GET /v1/sites/{cbid}/translation:
 // provider, key last four and fingerprint, when connected. Never the key.
 func (s *SitesService) Translation(ctx context.Context, cbid string) (Object, error) {
