@@ -608,6 +608,13 @@ func (s *FulfillmentService) UpdateExecutor(ctx context.Context, id string, patc
 	return s.c.object(ctx, "PATCH", "/v1/dsar/executors/"+esc(id), nil, executorPatchBody(patch))
 }
 
+// UpsertExecutor creates or updates the connection for a system from the same body as a create —
+// PUT /v1/dsar/executors. Re-running it changes nothing; a changed create-only field answers 409
+// immutable_field naming every such field. The answer carries upserted: created or updated.
+func (s *FulfillmentService) UpsertExecutor(ctx context.Context, body Object) (Object, error) {
+	return s.c.object(ctx, "PUT", "/v1/dsar/executors", nil, body)
+}
+
 // DryRunUpdateExecutor returns the connection as UpdateExecutor would leave it, and a diff,
 // changing nothing — PATCH /v1/dsar/executors/{id}?dryRun=1.
 func (s *FulfillmentService) DryRunUpdateExecutor(ctx context.Context, id string, patch ExecutorUpdate) (Object, error) {
