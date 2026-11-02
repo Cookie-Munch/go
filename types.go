@@ -68,6 +68,8 @@ type Site struct {
 	VerifyToken  string `json:"verifyToken,omitempty"`
 	VerifyMethod string `json:"verifyMethod,omitempty"` // dns | meta | file | embed
 	VerifiedAt   int64  `json:"verifiedAt,omitempty"`
+	// LastSeenAt is the last beacon from the domain or an alias (epoch ms, accurate to the hour); 0 before the first.
+	LastSeenAt int64 `json:"lastSeenAt,omitempty"`
 }
 
 // SiteCreate is the body of POST /v1/sites. CBID is optional; the server

@@ -1481,6 +1481,48 @@ func (s *SitesService) DeclareCookieSuggestionsDryRun(ctx context.Context, cbid 
 	return s.c.object(ctx, "POST", sitePath(cbid, "/cookies/suggestions/declare"), dryRun, in)
 }
 
+// Translation returns the site's own translation account — GET /v1/sites/{cbid}/translation:
+// provider, key last four and fingerprint, when connected. Never the key.
+func (s *SitesService) Translation(ctx context.Context, cbid string) (Object, error) {
+	return s.c.object(ctx, "GET", sitePath(cbid, "/translation"), nil, nil)
+}
+
+// ConnectTranslation connects the site's own DeepL or Google Cloud Translation key — PUT
+// /v1/sites/{cbid}/translation (provider "deepl" or "google"). Stored sealed, never returned.
+// verify checks it with the provider first, sending no text.
+func (s *SitesService) ConnectTranslation(ctx context.Context, cbid, provider, key string, verify bool) (Object, error) {
+	var q url.Values
+	if verify {
+		q = verifyQuery("1")
+	}
+	return s.c.object(ctx, "PUT", sitePath(cbid, "/translation"), q, Object{"provider": provider, "key": key})
+}
+
+// DisconnectTranslation removes the site's translation key — DELETE /v1/sites/{cbid}/translation.
+// Translations already stored stay.
+func (s *SitesService) DisconnectTranslation(ctx context.Context, cbid string) (Object, error) {
+	return s.c.object(ctx, "DELETE", sitePath(cbid, "/translation"), nil, nil)
+}
+
+// TranslateCookies machine-translates the missing purposes of the site's own cookie rows on its
+// connected account — POST /v1/sites/{cbid}/cookies/translate ({"languages": […], "names": […]},
+// both optional). Never overwrites a row's text.
+func (s *SitesService) TranslateCookies(ctx context.Context, cbid string, in Object) (Object, error) {
+	if in == nil {
+		in = Object{}
+	}
+	return s.c.object(ctx, "POST", sitePath(cbid, "/cookies/translate"), nil, in)
+}
+
+// TranslateCookiesDryRun is TranslateCookies with ?dryRun=1: it lists what would be translated
+// and calls no provider.
+func (s *SitesService) TranslateCookiesDryRun(ctx context.Context, cbid string, in Object) (Object, error) {
+	if in == nil {
+		in = Object{}
+	}
+	return s.c.object(ctx, "POST", sitePath(cbid, "/cookies/translate"), dryRun, in)
+}
+
 // RemoveCookiePreset removes every declaration a vendor preset made — DELETE
 // /v1/sites/{cbid}/cookies/presets/{vendor}.
 func (s *SitesService) RemoveCookiePreset(ctx context.Context, cbid, vendor string) (Object, error) {
@@ -1757,6 +1799,8 @@ type CaseInput struct {
 	SkipSystems  []string     `json:"skipSystems,omitempty"`
 	Fulfill      *bool        `json:"fulfill,omitempty"`
 	Test         bool         `json:"test,omitempty"`
+	// Controller names, on a processor site, the business the case concerns (optional when the site lists one).
+	Controller string `json:"controller,omitempty"`
 }
 
 // CaseOptions carries the headers of a case intake: an Idempotency-Key (16–128 characters) so a
@@ -1829,6 +1873,13 @@ func (s *DsarSettingsService) Get(ctx context.Context, cbid string) (Object, err
 // Set — PUT /v1/sites/{cbid}/dsar-settings. Applies to cases opened afterwards.
 func (s *DsarSettingsService) Set(ctx context.Context, cbid string, graceDays int) (Object, error) {
 	return s.c.object(ctx, "PUT", sitePath(cbid, "/dsar-settings"), nil, map[string]any{"graceDays": graceDays})
+}
+
+// Update — PUT /v1/sites/{cbid}/dsar-settings, changing only the keys given: "graceDays", "processing" (this site is a
+// processor: {"role": "processor", "controllers": [...]}, nil clears) and "acceptForwardsFrom" (processors that may
+// open cases here, nil clears). A webhook "secret" is write-only.
+func (s *DsarSettingsService) Update(ctx context.Context, cbid string, settings map[string]any) (Object, error) {
+	return s.c.object(ctx, "PUT", sitePath(cbid, "/dsar-settings"), nil, settings)
 }
 
 // IntegrationsService is the cards for support, CRM and helpdesk sidebars (dsar:read), and
