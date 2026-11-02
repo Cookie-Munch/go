@@ -67,6 +67,7 @@ type Client struct {
 	Members     *MembersService
 	Keys        *KeysService
 	Sandbox     *SandboxService
+	Anchors     *AnchorsService
 	Webhooks    *WebhooksService
 	Banners     *BannersService
 
@@ -171,6 +172,7 @@ func New(apiKey string, opts ...Option) *Client {
 	c.Members = &MembersService{c: c}
 	c.Keys = &KeysService{c: c}
 	c.Sandbox = &SandboxService{c: c}
+	c.Anchors = &AnchorsService{c: c}
 	c.Webhooks = &WebhooksService{c: c}
 	c.Banners = &BannersService{c: c}
 	c.Identity = &IdentityService{c: c}
