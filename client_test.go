@@ -87,6 +87,28 @@ func TestSitesListGet(t *testing.T) {
 	}
 }
 
+func TestListEnvelopeUnwrapped(t *testing.T) {
+	for _, tc := range []struct{ version, body string }{
+		{"2026-11-03", `{"data":[{"cbid":"cb_1"}],"next":"1"}`},
+		{"2026-01-01", `[{"cbid":"cb_1"}]`},
+	} {
+		c := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("CookieMunch-Version", tc.version)
+			_, _ = w.Write([]byte(tc.body))
+		})
+		sites, err := c.Sites.List(context.Background())
+		if err != nil || len(sites) != 1 || sites[0].CBID != "cb_1" {
+			t.Errorf("%s: sites = %+v, err = %v", tc.version, sites, err)
+		}
+	}
+	if got := string(unwrapList("2026-11-03", []byte(`{"data":[],"total":0}`))); got != `{"data":[],"total":0}` {
+		t.Errorf("an object with other fields was unwrapped: %s", got)
+	}
+	if got := string(unwrapList("2026-10-24", []byte(`{"data":[]}`))); got != `{"data":[]}` {
+		t.Errorf("unwrapped before 2026-11-03: %s", got)
+	}
+}
+
 func TestConsentIngestPost(t *testing.T) {
 	var gotBody ConsentIngest
 	var gotMethod, gotPath, gotContentType string

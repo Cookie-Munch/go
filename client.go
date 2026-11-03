@@ -453,8 +453,30 @@ func (c *Client) doWithHeaders(ctx context.Context, method, path string, query u
 	if len(bytes.TrimSpace(data)) == 0 {
 		return nil
 	}
-	if err := json.Unmarshal(data, out); err != nil {
+	if err := json.Unmarshal(unwrapList(resp.Header.Get("CookieMunch-Version"), data), out); err != nil {
 		return fmt.Errorf("cookiemunch: decoding response: %w", err)
 	}
 	return nil
+}
+
+// unwrapList: from API version 2026-11-03 a list answers {"data": [...]} (plus "next"); hand back the
+// array either way, so a list method decodes the same under every version.
+func unwrapList(version string, data []byte) []byte {
+	if version == "" || version < "2026-11-03" {
+		return data
+	}
+	var obj map[string]json.RawMessage
+	if json.Unmarshal(data, &obj) != nil {
+		return data
+	}
+	inner, ok := obj["data"]
+	if !ok || len(bytes.TrimSpace(inner)) == 0 || bytes.TrimSpace(inner)[0] != '[' {
+		return data
+	}
+	for k := range obj {
+		if k != "data" && k != "next" {
+			return data
+		}
+	}
+	return inner
 }
