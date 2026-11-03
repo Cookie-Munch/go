@@ -1404,7 +1404,7 @@ type DeclaredCookieInput struct {
 	// Pattern treats the name as a prefix wildcard (a trailing "*" does the same).
 	Pattern bool `json:"pattern,omitempty"`
 	// Type declares browser storage instead of a cookie: "localStorage", "sessionStorage"
-	// or "indexedDB". Left empty, it is a cookie.
+	// or "indexedDB"; "none" is a cookieless processor that stores nothing. Left empty, it is a cookie.
 	Type string `json:"type,omitempty"`
 }
 
@@ -1434,7 +1434,7 @@ type PurgeObservedInput struct {
 	Until string `json:"until,omitempty"`
 }
 
-// CookiePresets lists every declaration preset (atlas, forumulate, chatly, cookiemunch, referalli, firstpromoter, partnerstack, tapfiliate, impact) —
+// CookiePresets lists every declaration preset (atlas, forumulate, chatly, cookiemunch, referalli, firstpromoter, partnerstack, tapfiliate, impact, seolyticize) —
 // GET /v1/sites/{cbid}/cookies/presets: parameters, what each declared here, and whether
 // the vendor's manifest exists yet.
 func (s *SitesService) CookiePresets(ctx context.Context, cbid string) (Object, error) {
