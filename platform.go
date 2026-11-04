@@ -1540,6 +1540,25 @@ func (s *SitesService) TranslateCookiesDryRun(ctx context.Context, cbid string, 
 	return s.c.object(ctx, "POST", sitePath(cbid, "/cookies/translate"), dryRun, in)
 }
 
+// TranslateConfig machine-translates the site's own banner and category copy into the
+// i18n.overrides languages it lacks, on its connected account — POST
+// /v1/sites/{cbid}/config/translate ({"languages": […]}, optional). Never overwrites a person's text.
+func (s *SitesService) TranslateConfig(ctx context.Context, cbid string, in Object) (Object, error) {
+	if in == nil {
+		in = Object{}
+	}
+	return s.c.object(ctx, "POST", sitePath(cbid, "/config/translate"), nil, in)
+}
+
+// TranslateConfigDryRun is TranslateConfig with ?dryRun=1: it lists what would be translated
+// and calls no provider.
+func (s *SitesService) TranslateConfigDryRun(ctx context.Context, cbid string, in Object) (Object, error) {
+	if in == nil {
+		in = Object{}
+	}
+	return s.c.object(ctx, "POST", sitePath(cbid, "/config/translate"), dryRun, in)
+}
+
 // RemoveCookiePreset removes every declaration a vendor preset made — DELETE
 // /v1/sites/{cbid}/cookies/presets/{vendor}.
 func (s *SitesService) RemoveCookiePreset(ctx context.Context, cbid, vendor string) (Object, error) {
