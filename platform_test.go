@@ -617,6 +617,20 @@ func TestScanWaitAndWaitForScan(t *testing.T) {
 	}
 }
 
+func TestScanSignedInSendsCookiesAndReadsTheDiff(t *testing.T) {
+	c, calls := recorder(t, "application/json", `{"state":"done","undeclared":[{"name":"_ga","category":"statistics"}],"stale":[{"name":"old","lastSeenAt":null}]}`)
+	r, err := c.Sites.ScanSignedIn(context.Background(), "cb", "sid=abc", 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if (*calls)[0].method+" "+(*calls)[0].url != "POST /v1/sites/cb/scan" || !reflect.DeepEqual((*calls)[0].body, map[string]any{"cookies": "sid=abc"}) {
+		t.Errorf("call = %+v", (*calls)[0])
+	}
+	if len(r.Undeclared) != 1 || r.Undeclared[0].Name != "_ga" || len(r.Stale) != 1 || r.Stale[0].LastSeenAt != nil {
+		t.Errorf("diff = %+v", r)
+	}
+}
+
 func TestExecutorPresetsCanaryAndUpgrade(t *testing.T) {
 	c, calls := recorder(t, "application/json", "{}")
 	ctx := context.Background()

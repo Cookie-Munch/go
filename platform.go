@@ -530,6 +530,8 @@ type ExecutorPresetInput struct {
 	RequireApproval *bool `json:"requireApproval,omitempty"`
 	// Verify ("1" or "warn"): as on ExecutorInput, sent as ?verify=.
 	Verify string `json:"-"`
+	// Params carries any of the preset's params by name ({"programId": "prg_1"} for referalli), as listed by ExecutorPresets.
+	Params map[string]any `json:"params,omitempty"`
 }
 
 // ConnectExecutorPreset registers a system from a preset — POST /v1/dsar/executors {preset}.
@@ -549,6 +551,17 @@ func (s *FulfillmentService) ExecutorPresets(ctx context.Context) (Object, error
 	return s.c.object(ctx, "GET", "/v1/dsar/executors/presets", nil, nil)
 }
 
+// ExecutorSuggestions lists the platforms a site's cookie rows and partner links imply that have
+// no connected system yet, with each preset's availability — GET /v1/dsar/executors/suggestions.
+// An empty cbid means every site the key reaches.
+func (s *FulfillmentService) ExecutorSuggestions(ctx context.Context, cbid string) (Object, error) {
+	var q url.Values
+	if cbid != "" {
+		q = url.Values{"cbid": {cbid}}
+	}
+	return s.c.object(ctx, "GET", "/v1/dsar/executors/suggestions", q, nil)
+}
+
 // ExecutorPresetUpgrade is what UpgradeExecutorPreset sends: a version, a preset to adopt
 // (on a hand-written connection), or params to add. All optional.
 type ExecutorPresetUpgrade struct {
@@ -561,6 +574,8 @@ type ExecutorPresetUpgrade struct {
 	// AcceptPreset names overridden paths (profileOverrides) that take the preset's value again;
 	// every other override is kept and listed in the diff as kept or conflict.
 	AcceptPreset []string `json:"acceptPreset,omitempty"`
+	// Params carries any of the preset's params by name.
+	Params map[string]any `json:"params,omitempty"`
 }
 
 // UpgradeExecutorPreset rebuilds a connection from its preset's latest version, keeping its
@@ -721,6 +736,12 @@ func (s *FulfillmentService) TestExecutor(ctx context.Context, id string, input 
 // canary subject only — POST /v1/dsar/executors/{id}/test {"conformance": true}.
 func (s *FulfillmentService) ExecutorConformance(ctx context.Context, id string) (Object, error) {
 	return s.c.object(ctx, "POST", "/v1/dsar/executors/"+esc(id)+"/test", nil, map[string]any{"conformance": true})
+}
+
+// GetExecutorCompletionSecret reads the connection's current completion secret and completionUrl
+// again (dsar:write, audited) — GET /v1/dsar/executors/{id}/completion-secret.
+func (s *FulfillmentService) GetExecutorCompletionSecret(ctx context.Context, id string) (Object, error) {
+	return s.c.object(ctx, "GET", "/v1/dsar/executors/"+esc(id)+"/completion-secret", nil, nil)
 }
 
 // RollExecutorCompletionSecret mints a new completion secret, shown once; the old one keeps
@@ -1187,6 +1208,12 @@ func (s *RightsIdentityService) Remove(ctx context.Context, cbid string) (Object
 	return s.c.object(ctx, "DELETE", sitePath(cbid, "/rights-identity"), nil, nil)
 }
 
+// Check tests one session token as the rights intake would — POST /v1/sites/{cbid}/rights-identity/check.
+// The result says verified, reason, jwt, detail and claims; nothing is filed.
+func (s *RightsIdentityService) Check(ctx context.Context, cbid, token string) (Object, error) {
+	return s.c.object(ctx, "POST", sitePath(cbid, "/rights-identity/check"), nil, map[string]any{"token": token})
+}
+
 // ---- the operations only the dashboard used to have --------------------------
 
 // OrgService reads and changes the key's own organisation — /v1/org. It needs an
@@ -1247,7 +1274,7 @@ type MailProviderSMTP struct {
 }
 
 // MailProviderInput is your own mail provider for rights-request mail. Provider is one of
-// brevo, sendgrid, postmark, resend, ses, smtp. Secret is write-only (API key, server token,
+// brevo, sendgrid, postmark, resend, ses, smtp, hermetica. Secret is write-only (API key, server token,
 // secret access key or SMTP password); leave it empty to keep the stored one (same provider only).
 // The whole provider is replaced, so a field left empty is cleared.
 type MailProviderInput struct {
@@ -1417,7 +1444,7 @@ type CookiePresetParams struct {
 	PublicID              string `json:"publicId,omitempty"`
 	Dragging              bool   `json:"dragging,omitempty"`
 	// Storage is the Chatly widget's own storage option: "allow", "deny", "on-open", or a
-	// map of functional/analytics/marketing to one of those.
+	// map of functional/analytics/marketing to one of those. Hermetica: "localStorage" (default) or "cookie".
 	Storage any `json:"storage,omitempty"`
 	// Tracking is the Chatly widget's own tracking option: false, or a map such as {"visits": false}.
 	Tracking     any    `json:"tracking,omitempty"`
@@ -1426,6 +1453,8 @@ type CookiePresetParams struct {
 	CookieDays   int    `json:"cookieDays,omitempty"`
 	LegacyName   *bool  `json:"legacyName,omitempty"`
 	CampaignID   string `json:"campaignId,omitempty"`
+	// PublicKey is Lucida's public project key; only its last 8 word characters (the key suffix) are used.
+	PublicKey string `json:"publicKey,omitempty"`
 }
 
 // PurgeObservedInput is the window of a purge: Since (and optionally Until), ISO-8601.
@@ -1434,7 +1463,7 @@ type PurgeObservedInput struct {
 	Until string `json:"until,omitempty"`
 }
 
-// CookiePresets lists every declaration preset (atlas, forumulate, chatly, cookiemunch, referalli, firstpromoter, partnerstack, tapfiliate, impact, seolyticize) —
+// CookiePresets lists every declaration preset (atlas, forumulate, chatly, cookiemunch, referalli, firstpromoter, partnerstack, tapfiliate, impact, seolyticize, lucida, hermetica, watchtower) —
 // GET /v1/sites/{cbid}/cookies/presets: parameters, what each declared here, and whether
 // the vendor's manifest exists yet.
 func (s *SitesService) CookiePresets(ctx context.Context, cbid string) (Object, error) {

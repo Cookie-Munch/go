@@ -321,8 +321,19 @@ func (c *Client) Audit(ctx context.Context, limit int) (Object, error) {
 	return c.object(ctx, "GET", "/v1/audit", limitQuery(limit), nil)
 }
 
+// AuditSince returns the audit rows at or after since — GET /v1/audit?since=, for a log
+// shipper. An unscoped key or one with audit:read.
+func (c *Client) AuditSince(ctx context.Context, since time.Time, limit int) (Object, error) {
+	q := limitQuery(limit)
+	if q == nil {
+		q = url.Values{}
+	}
+	q.Set("since", since.UTC().Format(time.RFC3339Nano))
+	return c.object(ctx, "GET", "/v1/audit", q, nil)
+}
+
 // AuditByActor returns the audit rows of one actor — GET /v1/audit?actor=. "self" is the
-// calling key's own rows, the one form a scoped or property-locked key may read.
+// calling key's own rows, which any key may read.
 func (c *Client) AuditByActor(ctx context.Context, actor string, limit int) (Object, error) {
 	q := limitQuery(limit)
 	if q == nil {

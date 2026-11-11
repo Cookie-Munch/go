@@ -152,6 +152,21 @@ func (s *SitesService) Scan(ctx context.Context, cbid string) (*ScanStatus, erro
 	return &out, nil
 }
 
+// ScanSignedIn starts a signed-in cookie crawl — POST /v1/sites/{cbid}/scan with cookies:
+// a test account's Cookie header value ("sid=abc; csrf=def"), set only on the site's own
+// hosts and never stored or returned. wait > 0 holds the request (at most 60 s).
+func (s *SitesService) ScanSignedIn(ctx context.Context, cbid string, cookies string, wait time.Duration) (*ScanStatus, error) {
+	var out ScanStatus
+	var q url.Values
+	if wait > 0 {
+		q = waitQuery(wait)
+	}
+	if err := s.c.do(ctx, http.MethodPost, sitePath(cbid, "/scan"), q, map[string]string{"cookies": cookies}, &out); err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
 // ScanStatus returns the current cookie-scan status —
 // GET /v1/sites/{cbid}/scan.
 func (s *SitesService) ScanStatus(ctx context.Context, cbid string) (*ScanStatus, error) {

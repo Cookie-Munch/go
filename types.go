@@ -157,6 +157,23 @@ type ScanStatus struct {
 	// Error says why it failed.
 	Error        string         `json:"error,omitempty"`
 	ButtonParity map[string]any `json:"buttonParity,omitempty"`
+	// Undeclared (once done) lists cookies the scan saw, or a visit since, that no declaration covers.
+	Undeclared []ScanUndeclared `json:"undeclared,omitempty"`
+	// Stale (once done) lists declarations the scan did not see and nothing has seen for staleAfterDays.
+	Stale []ScanStale `json:"stale,omitempty"`
+}
+
+// ScanUndeclared is a cookie a scan saw that the site has not declared.
+type ScanUndeclared struct {
+	Name     string `json:"name"`
+	Domain   string `json:"domain,omitempty"`
+	Category string `json:"category"`
+}
+
+// ScanStale is a declaration nothing has seen lately; LastSeenAt is nil when never seen.
+type ScanStale struct {
+	Name       string `json:"name"`
+	LastSeenAt *int64 `json:"lastSeenAt"`
 }
 
 // RetireCookieInput is the body of RetireCookie: the cookie's new name, if it was
