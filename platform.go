@@ -1430,8 +1430,8 @@ type DeclaredCookieInput struct {
 	Domain   string            `json:"domain,omitempty"`
 	// Pattern treats the name as a prefix wildcard (a trailing "*" does the same).
 	Pattern bool `json:"pattern,omitempty"`
-	// Type declares browser storage instead of a cookie: "localStorage", "sessionStorage"
-	// or "indexedDB"; "none" is a cookieless processor that stores nothing. Left empty, it is a cookie.
+	// Type declares browser storage instead of a cookie: "localStorage", "sessionStorage",
+	// "indexedDB" or "cacheStorage"; "none" is a cookieless processor that stores nothing. Left empty, it is a cookie.
 	Type string `json:"type,omitempty"`
 }
 
@@ -1525,6 +1525,15 @@ func (s *SitesService) PlanCookies(ctx context.Context, cbid string, in Object) 
 		in = Object{}
 	}
 	return s.c.object(ctx, "POST", sitePath(cbid, "/cookies/plan"), nil, in)
+}
+
+// ApplyCookies applies what PlanCookies shows, all or nothing — POST /v1/sites/{cbid}/cookies/apply with the
+// same body (incl. "handOver"): stored only when every step passes; a refusal stores nothing.
+func (s *SitesService) ApplyCookies(ctx context.Context, cbid string, in Object) (Object, error) {
+	if in == nil {
+		in = Object{}
+	}
+	return s.c.object(ctx, "POST", sitePath(cbid, "/cookies/apply"), nil, in)
 }
 
 // Translation returns the site's own translation account — GET /v1/sites/{cbid}/translation:
