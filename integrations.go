@@ -81,6 +81,16 @@ func (s *SitesService) UnlinkPartner(ctx context.Context, cbid, linkID string) (
 	return s.c.object(ctx, "DELETE", sitePath(cbid, "/partners/"+esc(linkID)), nil, nil)
 }
 
+// UpdatePartner fixes a site link's externalId or label in place, keeping the grant —
+// PATCH /v1/sites/{cbid}/partners/{linkId} (dryRun: ?dryRun=1). The result is {change, link, steps, nextSteps, warnings?}.
+func (s *SitesService) UpdatePartner(ctx context.Context, cbid, linkID string, in PartnerLinkUpdate, dryRun bool) (Object, error) {
+	var q url.Values
+	if dryRun {
+		q = dryRunQuery()
+	}
+	return s.c.object(ctx, "PATCH", sitePath(cbid, "/partners/"+esc(linkID)), q, in)
+}
+
 // IntegrationHealth returns one row per link a site's privacy wiring depends on, each with
 // "ok" (null = could not check) and a "fixHint" — GET /v1/integration-health. cbid may be
 // empty when the org has one site.

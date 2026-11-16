@@ -232,3 +232,19 @@ func (s *PartnerLinksService) Create(ctx context.Context, in StandardPartnerLink
 func (s *PartnerLinksService) Revoke(ctx context.Context, id string) (Object, error) {
 	return s.c.object(ctx, "DELETE", "/v1/partner_links/"+esc(id), nil, nil)
 }
+
+// PartnerLinkUpdate is PATCH on a partner link: one or both. Scopes and events cannot change in place.
+type PartnerLinkUpdate struct {
+	ExternalID string `json:"externalId,omitempty"`
+	Label      string `json:"label,omitempty"`
+}
+
+// Update fixes a link's externalId or label in place, keeping the grant — PATCH /v1/partner_links/{id}
+// (dryRun: ?dryRun=1, storing nothing). "warnings" names executor keys minted for the old account.
+func (s *PartnerLinksService) Update(ctx context.Context, id string, in PartnerLinkUpdate, dryRun bool) (Object, error) {
+	var q url.Values
+	if dryRun {
+		q = dryRunQuery()
+	}
+	return s.c.object(ctx, "PATCH", "/v1/partner_links/"+esc(id), q, in)
+}
