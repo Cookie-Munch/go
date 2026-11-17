@@ -763,6 +763,12 @@ func (s *FulfillmentService) ApproveTask(ctx context.Context, requestID, taskID 
 	return s.c.object(ctx, "POST", "/v1/dsar/"+esc(requestID)+"/tasks/"+esc(taskID)+"/approve", nil, nil)
 }
 
+// RetryTask sends a failed task again once its system is fixed: a new request upstream.
+// Audited — POST /v1/dsar/{id}/tasks/{taskId}/retry.
+func (s *FulfillmentService) RetryTask(ctx context.Context, requestID, taskID string) (Object, error) {
+	return s.c.object(ctx, "POST", "/v1/dsar/"+esc(requestID)+"/tasks/"+esc(taskID)+"/retry", nil, nil)
+}
+
 // RejectTask refuses it: nothing is sent, and the task fails with reason (empty for none).
 // Audited — POST /v1/dsar/{id}/tasks/{taskId}/reject.
 func (s *FulfillmentService) RejectTask(ctx context.Context, requestID, taskID, reason string) (Object, error) {
