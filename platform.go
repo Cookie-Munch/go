@@ -1785,7 +1785,7 @@ func (s *KeysService) ListInOrg(ctx context.Context, orgID string) ([]ApiKeyPref
 	return out, nil
 }
 
-// CreateInOrg mints a scoped key in another org of the same account — POST
+// CreateInOrg mints a key in another org of the same account (full-access or orgs:keys key) — POST
 // /v1/orgs/{orgId}/keys. Scopes is required; the returned Key is shown ONCE. Needs an
 // account key (orgs:keys).
 func (s *KeysService) CreateInOrg(ctx context.Context, orgID string, input ApiKeyIssueInput) (*ApiKeyIssued, error) {
