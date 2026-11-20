@@ -1766,6 +1766,43 @@ func (s *KeysService) Report(ctx context.Context, unusedDays, expiringDays int) 
 
 // Update changes a key's name, scopes or property lock — PATCH /v1/keys/{prefix}.
 func (s *KeysService) Update(ctx context.Context, prefix string, patch ApiKeyUpdate) (Object, error) {
+	return s.c.object(ctx, "PATCH", "/v1/keys/"+esc(prefix), nil, apiKeyUpdateBody(patch))
+}
+
+// UpdateInOrg updates a key in another org of the same account — PATCH
+// /v1/orgs/{orgId}/keys/{prefix}. Needs an account key (orgs:keys); same patch as Update.
+func (s *KeysService) UpdateInOrg(ctx context.Context, orgID, prefix string, patch ApiKeyUpdate) (Object, error) {
+	return s.c.object(ctx, "PATCH", "/v1/orgs/"+esc(orgID)+"/keys/"+esc(prefix), nil, apiKeyUpdateBody(patch))
+}
+
+// ListInOrg returns another org's key prefixes — GET /v1/orgs/{orgId}/keys. Needs an
+// account key (orgs:keys).
+func (s *KeysService) ListInOrg(ctx context.Context, orgID string) ([]ApiKeyPrefix, error) {
+	var out []ApiKeyPrefix
+	if err := s.c.get(ctx, "/v1/orgs/"+esc(orgID)+"/keys", nil, &out); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// CreateInOrg mints a scoped key in another org of the same account — POST
+// /v1/orgs/{orgId}/keys. Scopes is required; the returned Key is shown ONCE. Needs an
+// account key (orgs:keys).
+func (s *KeysService) CreateInOrg(ctx context.Context, orgID string, input ApiKeyIssueInput) (*ApiKeyIssued, error) {
+	var out ApiKeyIssued
+	if err := s.c.post(ctx, "/v1/orgs/"+esc(orgID)+"/keys", input, &out); err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+// RevokeInOrg revokes a key in another org of the same account — DELETE
+// /v1/orgs/{orgId}/keys/{prefix}. Immediate. Needs an account key (orgs:keys).
+func (s *KeysService) RevokeInOrg(ctx context.Context, orgID, prefix string) error {
+	return s.c.delete(ctx, "/v1/orgs/"+esc(orgID)+"/keys/"+esc(prefix))
+}
+
+func apiKeyUpdateBody(patch ApiKeyUpdate) map[string]any {
 	body := map[string]any{}
 	if patch.Name != nil {
 		body["name"] = *patch.Name
@@ -1783,7 +1820,7 @@ func (s *KeysService) Update(ctx context.Context, prefix string, patch ApiKeyUpd
 			body["expiresAt"] = **patch.ExpiresAt
 		}
 	}
-	return s.c.object(ctx, "PATCH", "/v1/keys/"+esc(prefix), nil, body)
+	return body
 }
 
 // RollSecret rotates a subscription's signing secret — POST /v1/webhooks/{id}/roll. The
