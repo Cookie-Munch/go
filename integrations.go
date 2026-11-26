@@ -3,6 +3,7 @@ package cookiemunch
 import (
 	"context"
 	"net/url"
+	"strconv"
 )
 
 // SiteUpdate renames or moves a site. Only non-nil fields are sent. Name follows the three-way
@@ -41,6 +42,81 @@ func siteUpdateBody(p SiteUpdate) map[string]any {
 		body["keepOldDomain"] = true
 	}
 	return body
+}
+
+// Tenant is a site for one of your customers (a creator, a shop), the controller for its own visitors.
+// Path or Domains; zero values are not sent.
+type Tenant struct {
+	ExternalID string         `json:"externalId"`
+	Name       string         `json:"name,omitempty"`
+	Path       string         `json:"path,omitempty"`
+	Domains    []string       `json:"domains,omitempty"`
+	Controller map[string]any `json:"controller,omitempty"`
+	Inherit    []string       `json:"inherit,omitempty"`
+}
+
+func tenantsPath(parent string, rest string) string { return sitePath(parent, "/tenants"+rest) }
+
+func maybeDryRun(dryRun bool) url.Values {
+	if dryRun {
+		return dryRunQuery()
+	}
+	return nil
+}
+
+// CreateTenant creates a tenant, idempotent by ExternalID — POST /v1/sites/{cbid}/tenants.
+func (s *SitesService) CreateTenant(ctx context.Context, parentCbid string, in Tenant, dryRun bool) (Object, error) {
+	return s.c.object(ctx, "POST", tenantsPath(parentCbid, ""), maybeDryRun(dryRun), in)
+}
+
+// CreateTenantsBulk creates up to 100 tenants; send the same list again to resume — POST /v1/sites/{cbid}/tenants/bulk.
+func (s *SitesService) CreateTenantsBulk(ctx context.Context, parentCbid string, tenants []Tenant, dryRun bool) (Object, error) {
+	return s.c.object(ctx, "POST", tenantsPath(parentCbid, "/bulk"), maybeDryRun(dryRun), map[string]any{"tenants": tenants})
+}
+
+// ListTenants returns one page {tenants, nextCursor, total} — GET /v1/sites/{cbid}/tenants. limit 0 is the default.
+func (s *SitesService) ListTenants(ctx context.Context, parentCbid string, limit int, cursor string) (Object, error) {
+	q := url.Values{}
+	if limit > 0 {
+		q.Set("limit", strconv.Itoa(limit))
+	}
+	if cursor != "" {
+		q.Set("cursor", cursor)
+	}
+	return s.c.object(ctx, "GET", tenantsPath(parentCbid, ""), q, nil)
+}
+
+// GetTenant returns one tenant by your id for the customer — GET /v1/sites/{cbid}/tenants/{externalId}.
+func (s *SitesService) GetTenant(ctx context.Context, parentCbid, externalID string) (Object, error) {
+	return s.c.object(ctx, "GET", tenantsPath(parentCbid, "/"+esc(externalID)), nil, nil)
+}
+
+// UpdateTenant changes a tenant's name, path or controller — PATCH /v1/sites/{cbid}/tenants/{externalId}.
+func (s *SitesService) UpdateTenant(ctx context.Context, parentCbid, externalID string, patch map[string]any, dryRun bool) (Object, error) {
+	return s.c.object(ctx, "PATCH", tenantsPath(parentCbid, "/"+esc(externalID)), maybeDryRun(dryRun), patch)
+}
+
+// DeleteTenant deletes a tenant and everything its site holds — DELETE /v1/sites/{cbid}/tenants/{externalId}. Irreversible.
+func (s *SitesService) DeleteTenant(ctx context.Context, parentCbid, externalID string, dryRun bool) error {
+	return s.c.do(ctx, "DELETE", tenantsPath(parentCbid, "/"+esc(externalID)), maybeDryRun(dryRun), nil, nil)
+}
+
+// SiteMove is the body of Move. To is required; zero values of the rest are not sent.
+type SiteMove struct {
+	To           string `json:"to"`
+	From         string `json:"from,omitempty"`
+	KeepOld      *bool  `json:"keepOld,omitempty"`
+	TrustOldDays *int   `json:"trustOldDays,omitempty"`
+}
+
+// Move moves a site to a new domain: every stored value naming the old host, rewritten —
+// POST /v1/sites/{cbid}/move (dryRun: ?dryRun=1). After a refusal, send retry.body again.
+func (s *SitesService) Move(ctx context.Context, cbid string, in SiteMove, dryRun bool) (Object, error) {
+	var q url.Values
+	if dryRun {
+		q = dryRunQuery()
+	}
+	return s.c.object(ctx, "POST", sitePath(cbid, "/move"), q, in)
 }
 
 // Update renames or moves a site — PATCH /v1/sites/{cbid}. The cbid and the consent ledger
